@@ -1,0 +1,18 @@
+[project]
+name = "jet_ism"
+version = "0.0.1"
+authors = [
+  { name="Olga Borodina", email="olga.borodina@cfa.harvard.edu" },
+]
+description = "A small package fro jet-ism interaction study"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/olgaborodina/"
