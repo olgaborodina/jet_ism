@@ -8,7 +8,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
+from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity, weighted_std)
 
 import matplotlib.pyplot as plt    ## plot stuff
 from matplotlib import animation
@@ -25,6 +25,9 @@ from gaepsi2 import camera
 """ customize color maps """
 
 class MplColorHelper:
+    """
+    Helper class to use matplotlib colormaps in PyQt4.
+    """
     def __init__(self, cmap_name, start_val, stop_val):
         self.cmap_name = cmap_name
         self.cmap = plt.get_cmap(cmap_name)
@@ -35,21 +38,13 @@ class MplColorHelper:
         return self.scalarMap.to_rgba(val)
     
 def make_colormap(cmap_name):
+    """
+    Make a colormap for yt from a matplotlib colormap.
+    """
     y = np.linspace(0,1,100)
     COL = MplColorHelper(cmap_name, 0, 1)
     x = COL.get_rgb(y)
     return color.Colormap(x[:,0:3])
-
-def weighted_std(values, weights=None):
-    """
-    Return the weighted standard deviation.
-
-    values, weights -- NumPy ndarrays with the same shape.
-    """
-    average = np.average(values, weights=weights)
-    # Fast and numerically precise:
-    variance = np.average((values-average)**2, weights=weights)
-    return np.sqrt(variance)
 
 
 jetmap = make_colormap('cubehelix')
@@ -61,11 +56,9 @@ velmap = make_colormap('coolwarm')
 FloatType = np.float64
 IntType = np.int32
 
+""" image transformations """
 
-
-""" snippets """
-
-def overlap(img1,img2,thr=0):
+def overlap(img1, img2, thr=0):
     """
     overlap img2 onto img1, img2 is transparent in the region of black
     """
@@ -112,7 +105,7 @@ def overlay(img1,img2,x):
     
     return img3
 
-def cut(part,center,lbox,slab_width,orientation):
+def cut(part, center, lbox, slab_width, orientation):
     """
     take the entire snapshot and cut a slab from specified projection
     
@@ -132,25 +125,25 @@ def cut(part,center,lbox,slab_width,orientation):
     ppos -= center
     
     if orientation == 'xy':
-        d1,d2,d3 = 0,1,2
+        d1, d2, d3 = 0, 1, 2
     if orientation == 'yz':
-        d1,d2,d3 = 1,2,0
+        d1, d2, d3 = 1, 2, 0
     if orientation == 'xz':
-        d1,d2,d3 = 0,2,1
+        d1, d2, d3 = 0, 2, 1
     
-    mask = np.abs(ppos[:,d1]) < 0.5*lbox
-    mask &= np.abs(ppos[:,d2]) < 0.5*lbox
-    mask &= np.abs(ppos[:,d3]) < 0.5*slab_width
+    mask = np.abs(ppos[:,d1]) < 0.5 * lbox
+    mask &= np.abs(ppos[:,d2]) < 0.5 * lbox
+    mask &= np.abs(ppos[:,d3]) < 0.5 * slab_width
 
-    return mask,ppos[mask]
+    return mask, ppos[mask]
 
-def pos2device(ppos,lbox,slab_width,imsize,orientation):
+def pos2device(ppos, lbox, slab_width, imsize, orientation):
     """
     transfer cartesian position to device coordinates
     
     Parameters
     ----------
-    ppos: (N,3), particle position centered at [0,0,0]
+    ppos: (N,3), particle position centered at [0, 0, 0]
     lbox: box length
     slab_width: projection depth
     orientation: projection of 'xy','yz','xz'
@@ -159,17 +152,17 @@ def pos2device(ppos,lbox,slab_width,imsize,orientation):
     Returns
     particle position in device coordinates
     """    
-    lgt = 0.5*lbox
-    mpers = camera.ortho(-slab_width,slab_width,(-lgt,lgt,-lgt,lgt))  # (near,far,(left,right,top,bottom)),return 4*4 projectionmatrix
+    lgt = 0.5 * lbox
+    mpers = camera.ortho(-slab_width, slab_width, (-lgt, lgt, -lgt, lgt))  # (near,far,(left,right,top,bottom)),return 4*4 projectionmatrix
     
     if orientation == 'xy':
-        mmv = camera.lookat((0,0,-slab_width),(0,0,0),(1,0,0)) # (position of camera, focal point, up direction)
+        mmv = camera.lookat((0, 0, -slab_width), (0, 0, 0), (1, 0, 0)) # (position of camera, focal point, up direction)
     if orientation == 'yz':
-        mmv = camera.lookat((slab_width,0,0),(0,0,0),(0,1,0)) # (position of camera, focal point, up direction)
+        mmv = camera.lookat((slab_width, 0, 0), (0, 0, 0),(0, 1, 0)) # (position of camera, focal point, up direction)
     if orientation == 'xz':
-        mmv = camera.lookat((0,slab_width,0),(0,0,0),(1,0,0)) # (position of camera, focal point, up direction)
+        mmv = camera.lookat((0, slab_width, 0), (0, 0, 0), (1, 0, 0)) # (position of camera, focal point, up direction)
         
-    pos2d = camera.apply(camera.matrix(mpers,mmv),ppos) # apply a camera matrix to data coordinates, return position in clip coordinate
+    pos2d = camera.apply(camera.matrix(mpers, mmv), ppos) # apply a camera matrix to data coordinates, return position in clip coordinate
     posdev = camera.todevice(pos2d, extent=(imsize, imsize)) # Convert clipping coordinate to device coordinate
     
     return posdev
