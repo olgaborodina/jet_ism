@@ -20,6 +20,18 @@ import matplotlib as mpl
 
 
 def sfr_diagram(output_directory, snapshot_number, xmin=1e-3, xmax=1e8, ymin=-1e-6, ymax=2e-5, vmin=1, vmax=1e6, nbins=500, xlog=True, ylog=True, savefig=False):
+    """
+    Make a 2D histogram of SFR vs density for a given snapshot, weighted by mass
+    Input: output_directory (string) that stores the output files,
+           snapshot_number (int) number of the snapshot to analyze,
+           xmin, xmax (float) min and max density for the plot, default is 1e-3, 1e8
+           ymin, ymax (float) min and max SFR for the plot, default is -1e-6, 2e-5
+           vmin, vmax (float) min and max for the color scale, default is 1, 1e6
+           nbins (int) number of bins for the histogram, default is 500
+           xlog, ylog (boolean) whether to use log scale for x and y axes, default is True
+           savefig (boolean) whether to save the figure, default is False
+    Output: None (shows the plot and saves it if savefig is True)
+    """
     
     density_bins = np.linspace(xmin, xmax, nbins)
     sfr_bins = np.linspace(ymin, ymax, nbins)

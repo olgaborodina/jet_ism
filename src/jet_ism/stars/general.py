@@ -41,7 +41,7 @@ def get_mass(output_directory, onekpc=False):
 
 def get_full_info(output_directory, onekpc=False):
     """
-    Calculate evolution of mass, number of star particles as well as total star formation rate
+    Calculate evolution of mass, number of star particles as well as total star formation rate, and gas mass
     Input: directory (string) that stores the output files, 
            onekpc (boolean) controls if we focus on the central 1kpc of the box, default is True
     Output: numpy array with columns: time in Myr, total star formation rate in Msun/yr, number of star particles, total mass of star particles in Msun, total gas mass in Msun
