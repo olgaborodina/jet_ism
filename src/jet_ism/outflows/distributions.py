@@ -14,6 +14,16 @@ from .general import (get_temp)
 
 
 def calculate_distribution(output_directory, snapshot_number, velmin=-900, velmax=900):
+    """
+    Calculate velocity distribution of outflowing gas in three gas phases for a given snapshot
+    Input: output_directory (string) that stores the output files,
+           snapshot_number (int) number of the snapshot to analyze,
+           velmin, velmax (float) min and max velocity for the histogram, default is -900, 900
+    Output: bins (numpy array) edges of the velocity bins,
+            velocities_hot (numpy array) histogram of velocities in the hot phase weighted by mass,
+            velocities_warm (numpy array) histogram of velocities in the warm phase weighted by mass,
+            velocities_cold (numpy array) histogram of velocities in the cold phase weighted by mass
+    """
     bins = np.linspace(velmin, velmax, 91)
     bins_step = bins[1] - bins[0]
     
@@ -49,6 +59,16 @@ def calculate_distribution(output_directory, snapshot_number, velmin=-900, velma
     return bins, velocities_hot, velocities_warm, velocities_cold
 
 def calculate_distribution_average(output_directory, t_start, velmin=-900, velmax=900):
+    """
+    Calculate velocity distribution of outflowing gas in three gas phases, averaged over 1 Myr starting from t_start
+    Input: output_directory (string) that stores the output files,
+           t_start (float) starting time in Myr to calculate the average,
+           velmin, velmax (float) min and max velocity for the histogram, default is -900, 900
+    Output: bins (numpy array) edges of the velocity bins,
+            velocities_hot (numpy array) histogram of velocities in the hot phase weighted by mass,
+            velocities_warm (numpy array) histogram of velocities in the warm phase weighted by mass,
+            velocities_cold (numpy array) histogram of velocities in the cold phase weighted by mass
+    """
     bins = np.linspace(velmin, velmax, 91)
     bins_step = bins[1] - bins[0]
     

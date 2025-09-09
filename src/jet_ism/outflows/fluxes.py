@@ -44,6 +44,7 @@ def mass_flux_shell(snapshot, projection, radius, dr=20):
            projection (projection type, can be 'radial', 'transverse', or 'total')
            radius     (at what radius the flux is calculated)
            dr         (the shell width around radius)
+    Output: mass flux in simulation units for each pixel on the shell
     """
     x_all, y_all, z_all = snapshot['PartType0/Coordinates'][:].T
     j_all = mass_flux(snapshot, projection=projection)
