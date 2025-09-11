@@ -12,7 +12,8 @@ from multiprocessing import shared_memory
 import time
 
 
-def x_loop(i):    
+def _x_loop(i):
+    """ Calculate mean ram pressure and jet tracer at a given x position — used for parallelization"""    
     X = x_axis[i]
     dx = x_axis[1] - x_axis[0]
     dist = (x - center[0] - X) ** 2 + (y - center[1]) ** 2 + (z - center[2]) ** 2
@@ -24,7 +25,8 @@ def x_loop(i):
         index = np.argmin(dist)    
         return ram_pressure[index], jet_tracer[index]
 
-def x_loop_rp_only(i):
+def _x_loop_media(i):
+    """ Calculate mean ram pressure at a given x position — used for parallelization"""    
     dist = (x - center - x_axis[i]) ** 2 + (y - center) ** 2 + (z - center) ** 2
     index = (dist < 15) & (x < x_axis[i] - dx) & (x > x_axis[i] + dx)  
     
@@ -34,7 +36,21 @@ def x_loop_rp_only(i):
         index = np.argmin(dist)    
         return ram_pressure[index]
         
-def calculate_rampressure_axis(output_directory, i_file, f_file, x_axis_size=101, nkernels=32, chunk=1):
+def calculate_rampressure_jet_axis(output_directory, i_file, f_file, jet_tracer_threshold=2e-3, x_axis_size=101, nkernels=32, chunk=1):
+    """
+    Calculate ram pressure and jet end points along the jet axis as a function of time
+    Input: output_directory   (directory with the simulation outputs)
+              i_file          (initial snapshot for the calculation)
+              f_file          (final snapshot for the calculation)
+              x_axis_size     (number of points along the x axis, default is 101)
+              nkernels        (number of parallel kernels, default is 32)
+              chunk           (chunk size for the parallelization, default is 1)
+    Output: ram_pressure_list_parallel (list of ram pressure arrays at different times)
+            jet_tracer_fall_x_parallel_left  (list of x positions where jet tracer falls below threshold on the left side)
+            jet_tracer_fall_x_parallel_right (list of x positions where jet tracer falls below threshold on the right side)
+            x_axis (array of x positions)
+            time_parallel (array of times in Myr)
+    """          
     ram_pressure_list_parallel = []
     jet_tracer_fall_x_parallel_left = []
     jet_tracer_fall_x_parallel_right = []
@@ -64,47 +80,62 @@ def calculate_rampressure_axis(output_directory, i_file, f_file, x_axis_size=101
 
         ram_pressure_axis = []
         jet_tracer_axis = []
-        for ram_pressure_axis_1, jet_tracer_axis_1 in pool.map(x_loop, np.arange(len(x_axis)), chunksize=chunk):
+        for ram_pressure_axis_1, jet_tracer_axis_1 in pool.map(_x_loop, np.arange(len(x_axis)), chunksize=chunk):
             jet_tracer_axis.append(jet_tracer_axis_1)
             ram_pressure_axis.append(ram_pressure_axis_1)
     
         pool.close()
 
-        if sum(np.array(jet_tracer_axis)[mask_left]<2e-3) > 0:            
-            jet_tracer_fall_x_parallel_left.append(x_axis[mask_left][np.array(jet_tracer_axis)[mask_left]<2e-3][-1])
+        if sum(np.array(jet_tracer_axis)[mask_left]<jet_tracer_threshold) > 0:            
+            jet_tracer_fall_x_parallel_left.append(x_axis[mask_left][np.array(jet_tracer_axis)[mask_left]<jet_tracer_threshold][-1])
         else: jet_tracer_fall_x_parallel_left.append(-501)
         if sum(np.array(jet_tracer_axis)[mask_right]<2e-3) > 0: 
-            jet_tracer_fall_x_parallel_right.append(x_axis[mask_right][np.array(jet_tracer_axis)[mask_right]<2e-3][0])
+            jet_tracer_fall_x_parallel_right.append(x_axis[mask_right][np.array(jet_tracer_axis)[mask_right]<jet_tracer_threshold][0])
         else: jet_tracer_fall_x_parallel_right.append(501)
         ram_pressure_list_parallel.append(np.array(ram_pressure_axis))
     
-        time_parallel.append(get_time_from_snap(snap_data) * unit_time_in_megayr - 15)
+        time_parallel.append(get_time_from_snap(snap_data) * unit_time_in_megayr)
         
     time_parallel = np.array(time_parallel)
     return ram_pressure_list_parallel, jet_tracer_fall_x_parallel_left, jet_tracer_fall_x_parallel_right, x_axis, time_parallel
 
 
 def P_ISM_model(density, c_s, mach, b):
+    """
+    Calculate ISM pressure in erg/cm^3
+    Input: density (in code units)
+           c_s     (in code units)
+           mach    (Mach number)
+           b       (magnetic pressure factor, default is 1)
+    Output: ISM pressure in erg/cm^3"""
+
      return (1 + b * mach) * mach ** 2 * density * c_s ** 2 * 1e10 * (mu * PROTONMASS)
 
 
-def calculate_rampressure_full():
-
-    i_file = 13 # skip snap 0
+def calculate_rampressure_only(output_directory, i_file, f_file, dmin=30, dmax=500, x_axis_size=101, nkernels=32, chunk=1):
+    """
+    Calculate ram pressure along the jet axis as a function of time
+    Input: output_directory   (directory with the simulation outputs)
+              i_file          (initial snapshot for the calculation)
+              f_file          (final snapshot for the calculation)
+              dmin            (absolute value of minimum distance along the jet axis in pc)
+              dmax            (absolute value of maximum distance along the jet axis in pc)
+              x_axis_size     (number of points along the x axis, default is 101)
+              nkernels        (number of parallel kernels, default is 32)
+              chunk           (chunk size for the parallelization, default is 1)
+    Output: ram_pressure_list_parallel (list of ram pressure arrays at different times)
+            x_axis (array of x positions)
+            time_parallel (array of times in Myr)
+    """   
     ram_pressure_list_parallel = []
     time_parallel = []
     
-    x_axis = np.concatenate((np.linspace(500, 1000, 81), np.linspace(-1000, -500, 81)))
-    mask_left = (x_axis < -30)
-    mask_right = (x_axis > 30)
+    x_axis = np.concatenate((np.linspace(dmin, dmax, x_axis_size), np.linspace(-dmax, -dmin, x_axis_size)))
     
     dx = x_axis[1] - x_axis[0]
-    
-    #for i_file in tqdm.trange(12, 42):
-        
-    for i_file in tqdm.trange(60, 90):
-        filename = "snap_%03d.hdf5" % (i_file)
-    
+
+    for i in tqdm.trange(i_file, i_file):
+        filename = "snap_%03d.hdf5" % (i)
         snap_data = h5py.File(output_directory + filename, "r")
         
         x, y, z = snap_data['PartType0/Coordinates'][:].T
@@ -115,13 +146,13 @@ def calculate_rampressure_full():
     
         pool = Pool(32)
         ram_pressure_axis = []
-        for ram_pressure_axis_1 in pool.map(x_loop_media, np.arange(len(x_axis)), chunksize=1):
+        for ram_pressure_axis_1 in pool.map(_x_loop_media, np.arange(len(x_axis)), chunksize=chunk):
             ram_pressure_axis.append(ram_pressure_axis_1)
     
         pool.close()
         ram_pressure_list_parallel.append(np.array(ram_pressure_axis))
     
-        time_parallel.append(get_time_from_snap(snap_data) * unit_time_in_megayr - 15)
+        time_parallel.append(get_time_from_snap(snap_data) * unit_time_in_megayr)
     
     time_parallel = np.array(time_parallel)
     return ram_pressure_list_parallel, x_axis, time_parallel
@@ -129,10 +160,12 @@ def calculate_rampressure_full():
 
 
 def test_worker(i, x, y, z):
+"""A test worker function for parallel processing"""
     # Simulate CPU-bound work: compute a large vector norm
     return np.sum((x - i)**2 + (y - i)**2 + (z - i)**2)
 
 def test_parallel_speed(pool_size=4, n_jobs=100):
+    """Test the speed of parallel processing with a given pool size and number of jobs"""
     # Generate large data arrays (simulate a big simulation snapshot)
     size = 100000
     x = np.random.rand(size)

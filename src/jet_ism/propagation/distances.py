@@ -8,7 +8,11 @@ from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_s
 
 def weighted_percentile(data, weights, perc):
     """
-    perc : percentile in [0-1]!
+    Compute the weighted percentile of a data array
+    Input: data    (array with the data)
+           weights (array with the weights)
+           perc    (percentile in [0-1])
+    Output: value of the weighted percentile
     """
     ix = np.argsort(data)
     data = data[ix] # sort data
@@ -16,21 +20,13 @@ def weighted_percentile(data, weights, perc):
     cdf = (np.cumsum(weights) - 0.5 * weights) / np.sum(weights) # 'like' a CDF function
     return np.interp(perc, cdf, data)
 
-def percentile_distance_3(storage, box, density, machnumber, jetpower, start=15, i_file=12):
+def percentile_distance_3(output_directory, i_file=12):
     """
-    Create a table with jet tracer volume fraction and central density evolution with time
-    Input: box (type of the simulation: '2kpc', 'self-consistent', 'three-phases')
-           density    (number density of the simulation)
-           machnumber (mach number of the simulation)
-           jetpower   (jet power of the simulation)
-           start      (initial snapshot from the turbulent box)
-           i_file     (initial snapshot for the calculation)
-    Output: array with three columns: time in Myr, jet tracer volume fraction, and mean number density within central 50pc
-    
+    Create a table of 50, 80, 100th percentile of jet material distances as a function of time
+    Input: output_directory (directory with the simulation outputs)
+           i_file           (initial snapshot for the calculation, default is 12)
+    Output: array with four columns: time in Myr, distance of 100th percentile in pc, distance of 80th percentile in pc, distance of 50th percentile in pc
     """    
-    simulation_directory = str(f'/n/{storage}/LABS/hernquist_lab/Users/borodina/{box}/turb_jet_d{density}_m{machnumber}/jet{jetpower}_{start}')
-    output_directory = simulation_directory + "/output/"
-    figures_directory = simulation_directory + "/output/figures/"
     
     threshold_tracer = 1e-3
     distance_array = []
@@ -71,28 +67,22 @@ def percentile_distance_3(storage, box, density, machnumber, jetpower, start=15,
         distance_array.append([time, distance_100, distance_80, distance_50])
     return np.array(distance_array).T
 
-def percentile_evolution(storage, boxsize, density, machnumber, jetpower, start=15):
+def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_sample=501, time_max=20, i_file=12):
     """
-    Create a table with jet tracer volume fraction and central density evolution with time
-    Input: density    (number density of the simulation)
-           machnumber (mach number of the simulation)
-           jetpower   (jet power of the simulation)
-           start      (initial snapshot from the turbulent box)
-           a
-    Output: array with three columns: time un Myr, jet tracer volume fraction, and mean number density within central 50pc
-    
+    Create a table of distances and their corresponding fractions of jet material as a function of time
+    Input: output_directory (directory with the simulation outputs)
+           distance_min    (minimum distance in pc, default is 0)
+           distance_max    (maximum distance in pc, default is 750)
+           N_sample        (number of distance samples, default is 501)
+           time_max        (maximum time in Myr, default is 20)
+           i_file           (initial snapshot for the calculation, default is 12)
+    Output: array with two columns: distance of a percentile in pc, its corresponding fraction of jet material, time of the last snapshot in Myr
     """    
-    simulation_directory = str(f'/n/{storage}/LABS/hernquist_lab/Users/borodina/{boxsize}/turb_jet_d{density}_m{machnumber}/jet{jetpower}_{start}')
-    output_directory = simulation_directory + "/output/"
-    figures_directory = simulation_directory + "/output/figures/"
-    distances = np.linspace(750, 0, 501)
+
+    distances = np.linspace(distance_max, distance_min, N_sample)
     fractions = []
-    i_file = 0
-    time = 0
-    if type(start) == str:
-        start = 15
-    
-    while True and time < start + 5: #True or a number for a set length
+
+    while time < time_max:
         i_file += 1
         filename = "snap_%03d.hdf5" % (i_file)
         try:
@@ -123,5 +113,5 @@ def percentile_evolution(storage, boxsize, density, machnumber, jetpower, start=
                 fractions_i[i] = np.sum(mass_jet[distance_jet < d]) / np.sum(mass_jet)
             else:
                 fractions_i[i] = 0
-        fractions.append(fractions_i)
+        fractions.append([d, fractions_i])
     return np.array(fractions).T, time 
