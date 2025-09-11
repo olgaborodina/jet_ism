@@ -82,7 +82,7 @@ def _crop_img(im):
     return im
 
 def _make_gif(ifilename, ofilename, timestep=4):
-   """
+    """
     Create a gif from the images in the given directory
     Input: ifilename (string, location of the input files with asterisks, e.g. 'figures/*.png')
            ofilename (string, location of the output file, e.g. 'figures/animation.gif')
