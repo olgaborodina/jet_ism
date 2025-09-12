@@ -10,7 +10,7 @@ import h5py    # hdf5 format
 from pathlib import Path
 from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
 
-from .general import (get_temp)
+from ..gas.general import (get_temp)
 
 
 def calculate_distribution(output_directory, snapshot_number, velmin=-900, velmax=900):
@@ -52,9 +52,9 @@ def calculate_distribution(output_directory, snapshot_number, velmin=-900, velma
     mask_warm = ((temperatures > 10 ** 3.7) & (temperatures < 10 ** 4.4) & (radius > 400) & (radius < 500))
     mask_cold = ((temperatures < 10 ** 3.7) & (radius > 400) & (radius < 500))
 
-    velocities_hot = np.histogram((v_r[mask_hot]), bins=bins, weights=masses[mask_hot] / bins_step)[0])
-    velocities_warm = np.histogram((v_r[mask_warm]), bins=bins, weights=masses[mask_warm] / bins_step)[0])
-    velocities_cold = np.histogram((v_r[mask_cold]), bins=bins, weights=masses[mask_cold] / bins_step)[0])
+    velocities_hot = np.histogram((v_r[mask_hot]), bins=bins, weights=masses[mask_hot] / bins_step)[0]
+    velocities_warm = np.histogram((v_r[mask_warm]), bins=bins, weights=masses[mask_warm] / bins_step)[0]
+    velocities_cold = np.histogram((v_r[mask_cold]), bins=bins, weights=masses[mask_cold] / bins_step)[0]
     
     return bins, velocities_hot, velocities_warm, velocities_cold
 

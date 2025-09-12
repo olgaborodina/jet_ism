@@ -13,7 +13,7 @@ def blackholes(output_directory):
     black_hole_info = pd.read_csv(output_directory+'blackholes.txt', delimiter='\s+', names=['time', 'num', 'mass', 'mdot', 'mdot_msun_y', 'mass_tot_real', 'mdot_edd'])
     return black_hole_info
 
-def blackhole_details(output_directory):
+def blackhole_details(output_directory, number):
     """
     Read the black hole details from the blackhole_details.txt file in the output directory
     Input: output_directory (directory where snapshots are stored)

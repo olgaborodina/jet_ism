@@ -109,7 +109,7 @@ def P_ISM_model(density, c_s, mach, b):
            b       (magnetic pressure factor, default is 1)
     Output: ISM pressure in erg/cm^3"""
 
-     return (1 + b * mach) * mach ** 2 * density * c_s ** 2 * 1e10 * (mu * PROTONMASS)
+    return (1 + b * mach) * mach ** 2 * density * c_s ** 2 * 1e10 * (mu * PROTONMASS)
 
 
 def calculate_rampressure_only(output_directory, i_file, f_file, dmin=30, dmax=500, x_axis_size=101, nkernels=32, chunk=1):
@@ -160,7 +160,7 @@ def calculate_rampressure_only(output_directory, i_file, f_file, dmin=30, dmax=5
 
 
 def test_worker(i, x, y, z):
-"""A test worker function for parallel processing"""
+    """A testorker function for parallel processing"""
     # Simulate CPU-bound work: compute a large vector norm
     return np.sum((x - i)**2 + (y - i)**2 + (z - i)**2)
 

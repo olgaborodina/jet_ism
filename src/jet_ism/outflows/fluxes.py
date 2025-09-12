@@ -7,7 +7,7 @@ import h5py    # hdf5 format
 from pathlib import Path
 from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
 
-from .general import (get_temp)
+from ..gas.general import (get_temp)
 
 def mass_flux(snapshot, projection='radial', weights='full'):
     """

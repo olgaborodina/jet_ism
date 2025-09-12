@@ -532,7 +532,7 @@ class snapshot:
         #---------
         f,ax = plt.subplots(1, 1, figsize=(5,5))
         scale = color.NL(channels[1], range=range)
-        img = overlay(img1, img2, 2 *n p.nan_to_num(scale))
+        img = overlay(img1, img2, 2 * np.nan_to_num(scale))
         
         ax.imshow(img, extent=[0, lbox, 0, lbox],origin='lower')
         ax.set_xlabel('pc', fontsize=15)
