@@ -81,6 +81,7 @@ def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_s
 
     distances = np.linspace(distance_max, distance_min, N_sample)
     fractions = []
+    time = 0
 
     while time < time_max:
         i_file += 1
@@ -113,5 +114,5 @@ def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_s
                 fractions_i[i] = np.sum(mass_jet[distance_jet < d]) / np.sum(mass_jet)
             else:
                 fractions_i[i] = 0
-        fractions.append([d, fractions_i])
-    return np.array(fractions).T, time 
+            fractions.append(fractions_i)
+    return distances, np.array(fractions).T, time

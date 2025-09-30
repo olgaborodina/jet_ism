@@ -581,7 +581,7 @@ class snapshot:
         
         # random field
         channels = get_channel_random(self.fn, mask_random, center=center, lbox=lbox, slab_width=slab_width,
-                                          imsize=imsize, orientation=orientation, weight=weight)
+                                          imsize=imsize, orientation=orientation)
         img2 = sfrmap(color.NL(channels[1], range=range), color.NL(cn0, range=(-7, -6)))
         
         #---------
