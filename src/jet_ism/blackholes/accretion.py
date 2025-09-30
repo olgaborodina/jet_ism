@@ -78,7 +78,7 @@ def eddington_accretion(M_BH, eps_r=0.2):
     return  4 * np.pi * GRAVITY *  M_BH * PROTONMASS / eps_r / sigma_T / LIGHTSPEED  * unit_mass
 
 
-def jetpower_from_cumenergy(time, cumenergy):
+def jetpower_from_cumenergy(time, cumenergy_from_snapshot):
     """
     Calculate jet power in erg/s from the cumulative energy injected
     Input: time (time corrsponding to the cumulative energy measurement, in Myr)
@@ -86,7 +86,18 @@ def jetpower_from_cumenergy(time, cumenergy):
     Output: time, corresponding to the jet power measurements
             jet power in erg/s
     """    
-    return time[:-1], np.diff(cumenergy) / np.diff(time) / unit_time * unit_time_in_megayr
+    return time[:-1], np.diff(cumenergy_from_snapshot) / np.diff(time) / unit_time * unit_time_in_megayr
+
+def jetpower_from_snapshot(output_directory, i_file=13):
+    """
+    Read cumulative energies from the files in directory
+    Input: output_directory (directory where snap_datas are stored),
+           i_file(initial file to start from, default is 13)
+    Output: time, corresponding to the jet power measurements
+            jet power in erg/s
+    """    
+    time, cumenergy_from_snapshot = cumenergy(output_directory, i_file)
+    return time[:-1], np.diff(cumenergy_from_snapshot) / np.diff(time) / unit_time * unit_time_in_megayr
 
 def jetpower_from_bondi_formula(M_BH, density, soundspeed, alpha):
     """
