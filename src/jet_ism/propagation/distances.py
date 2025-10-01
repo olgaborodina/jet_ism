@@ -76,11 +76,12 @@ def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_s
            N_sample        (number of distance samples, default is 501)
            time_max        (maximum time in Myr, default is 20)
            i_file           (initial snapshot for the calculation, default is 12)
-    Output: array with two columns: distance of a percentile in pc, its corresponding fraction of jet material, time of the last snapshot in Myr
+    Output: three arrays: distances in pc, times of the snapshots, their corresponding fractions of jet material along time
     """    
 
-    distances = np.linspace(distance_max, distance_min, N_sample)
+    distances = np.linspace(distance_min, distance_max, N_sample)
     fractions = []
+    times = []
     time = 0
 
     while time < time_max:
@@ -88,8 +89,6 @@ def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_s
         filename = "snap_%03d.hdf5" % (i_file)
         try:
             snap_data = h5py.File(output_directory + filename, "r")
-            if get_time_from_snap(snap_data) * unit_time_in_megayr < start:
-                continue
         except:
             try:
                 i_file += 1
@@ -108,11 +107,13 @@ def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_s
         time = get_time_from_snap(snap_data) * unit_time_in_megayr
         distance_jet = np.sqrt(x[mask_jet] ** 2 + y[mask_jet] ** 2 + z[mask_jet] ** 2)
         mass_jet = mass[mask_jet] * jet_tracer[mask_jet]
-        fractions_i = np.zeros_like(distances)
+        fractions_i = np.zeros_like(distances).tolist()
         for i, d in enumerate(distances):
-            if distance_jet.max() > d:
-                fractions_i[i] = np.sum(mass_jet[distance_jet < d]) / np.sum(mass_jet)
-            else:
-                fractions_i[i] = 0
-            fractions.append(fractions_i)
-    return distances, np.array(fractions).T, time
+            fractions_i[i] = np.sum(mass_jet[distance_jet < d]) / np.sum(mass_jet)
+            if distance_jet.max() < d:
+                fractions_i[i] = 1.0
+                break
+        fractions.append(fractions_i)
+        times.append(time)
+        fractions_i = np.zeros_like(distances)
+    return distances, np.array(times), np.array(fractions).T

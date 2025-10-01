@@ -97,7 +97,7 @@ def jet_rampressure(ram_pressure_list_parallel, jet_tracer_fall_x_parallel_left,
 
 
 def jet_distances(dist_list, fractions_list,  
-                  time_max_list, labels_list, 
+                  times_list, labels_list, 
                   colors_list, title=r'jet power $10^{40}$ erg/s'):
     """
     Make plot of jet distances with shading for fractions of jet material
@@ -109,18 +109,24 @@ def jet_distances(dist_list, fractions_list,
            title            (title of the plot, default is 'jet power $10^{40}$ erg/s')
     """   
     
-    fig, ax = plt.subplots(figsize=(5,3))
+    fig, ax = plt.subplots(figsize=(4.5,3.2))
 
     for i in range(len(fractions_list)):
         cmap = shading_cmaps(colors_list[i])
     
     
-        plt.imshow(fractions_list[i], cmap=cmap, extent=(0, time_max_list[i]-15, 0, 750), vmin=0.5, vmax=1, aspect='auto')
-    
-        mask = (dist_list[i][0] < time_max_list[i])
-        
-        ax.plot(dist_list[i][0][mask]-15, dist_list[i][1][mask], c=colors_list[i], ls='-', lw=3.5, label=labels_list[i])
-        ax.plot(dist_list[i][0][mask]-15, dist_list[i][2][mask], c=colors_list[i], ls='--', lw=2)
+        plt.imshow(fractions_list[i], cmap=cmap, extent=(0, times_list[i].max()-times_list[i].min(), 
+                    dist_list[i].max(), dist_list[i].min()), vmin=0.5, vmax=1, aspect='auto')
+        dist_list_80 = []
+        dist_list_100 = []
+        for snap in range(len(fractions_list[i][0, :])):
+            close_to_80 = abs(fractions_list[i][:, snap] - 0.80).argmin()
+            close_to_100 = abs(fractions_list[i][:, snap] - 1.0).argmin()
+            dist_list_80.append(dist_list[i][close_to_80])
+            dist_list_100.append(dist_list[i][close_to_100])
+
+        ax.plot(times_list[i]-times_list[i].min(), dist_list_80, c=colors_list[i], ls='--', lw=2)
+        ax.plot(times_list[i]-times_list[i].min(), dist_list_100, c=colors_list[i], ls='-', lw=5, label=labels_list[i])
        
     ax.set_title(title)
     ax.set_xlabel('t [Myr]', fontsize=10)
