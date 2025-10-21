@@ -267,7 +267,7 @@ class snapshot:
         return f
 
 
-    def overlap_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar=False, 
+    def overlap_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom', 
                     show=True, savefig_file=None, t0=0, tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None):
         """
         plot jet map overlaid on top of gas density+temp map
@@ -278,7 +278,7 @@ class snapshot:
         slab_width: projection depth
         imsize: Npixel of the image
         orientation: projection of 'xy','yz','xz'
-        showbar: whether to show the colorbar, boolean, default False
+        showbar: whether to show the colorbar, bottom, right, none, or blank
         show: whether to show the plot, boolean, default True
         savefig_file: filename to save the figure, default None (not saving)
         t0: time offset for the title in Myr, default 0
@@ -314,7 +314,7 @@ class snapshot:
 
         #---------
         fontprop = fm.FontProperties(size=12)
-        if showbar==True:
+        if showbar=='bottom':
             f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
             f.subplots_adjust(hspace=0.3)
             axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
@@ -344,7 +344,36 @@ class snapshot:
                 plt.show()
             else: 
                 plt.close()
-        else:
+        elif showbar=='right':
+            f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
+            axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title('t=%.2f Myr'%(self.time), fontsize=18)
+
+            scalebar = AnchoredSizeBar(axes[0].transData,
+                           200, '200 pc', 'lower center', 
+                           pad=0.2,
+                           color='white',
+                           frameon=False,
+                           size_vertical=1.5,
+                           fontproperties=fontprop,
+                           sep=3)
+            axes[0].add_artist(scalebar)
+            axes[0].set_xticks([])
+            axes[0].set_yticks([]) 
+    
+            axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)), extent=[vmin, vmax, t_up, 3], aspect=4.1)
+            axes[1].set_ylabel('log (temperature [K])', labelpad=4)
+            axes[1].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
+            axes[1].yaxis.tick_right()
+            axes[1].yaxis.set_label_position('right')
+        
+            if savefig_file != None:
+                plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+            if show == True:
+                plt.show()
+            else: 
+                plt.close()
+        elif showbar=='none':
             f,ax = plt.subplots(1, 1, figsize=(5,5))            
             ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
             ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
@@ -360,13 +389,23 @@ class snapshot:
             ax.add_artist(scalebar)
             ax.set_xticks([])
             ax.set_yticks([])
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")        
-        if show == True:
-            plt.show()
-        else: 
-            plt.close()
+            if savefig_file != None:
+                plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+            if show == True:
+                plt.show()
+            else: 
+                plt.close()
+        elif showbar=='blank':
+            f,ax = plt.subplots(1, 1, figsize=(5,5))            
+            ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            if savefig_file != None:
+                plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+            if show == True:
+                plt.show()
+            else: 
+                plt.close()
         return f
 
     def overlap_sigma_velocity(self,lbox,slab_width=None,imsize=2000,orientation='xy', show=True):
@@ -417,79 +456,7 @@ class snapshot:
             plt.close()
         return f
 
-
-    def overlap_temp_slides(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, 
-                            savefig_file=None, t0=0, tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None):
-        """
-        TODO: DEBUG
-        plot jet map overlaid on top of gas density+temp map
-        
-        Parameters
-        ----------
-        lbox: box length
-        slab_width: projection depth
-        orientation: projection of 'xy','yz','xz'
-        imsize: Npixel of the image
-        show: whether to show the plot, boolean, default True
-        savefig_file: filename to save the figure, default None (not saving)
-        t0: time offset for the title in Myr, default 0
-        tmin, tmax: color range for the temperature map in log scale, default (2.5, 7.0)
-        vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
-        center: center of the box, default None (box center)
-        """
-        BoxSize = self.BoxSize
-        if center==None:
-            center = self.center
-
-        cn0 = np.ones((imsize, imsize)) * 1e-6 # dens placeholder
-        cn1 = np.ones((imsize, imsize)) * 1e4 # temp placeholder
-        t_low, t_up = tmin, tmax # 1e2K, 1e7K
-        
-        # gas rho temp
-        channels = get_channel_gas_rhotemp(self.fn, center=center, lbox=lbox, slab_width=slab_width,
-                                   imsize=imsize, orientation=orientation)
-        x = channels[0][channels[0]>0]
-        vmin0,vmax0 = np.log10(np.percentile(x,1)),np.log10(np.percentile(x,99))
-        if vmin == None:
-            vmin = vmin0
-        if vmax == None:
-            vmax = vmax0
-        img1 = color.CoolWarm(color.NL(channels[1], range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
-        
-
-        #---------
-        f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
-        scale = color.NL(channels[1], range=(-5, 0))
-        # img = overlay(img1,img2,2*np.nan_to_num(scale))
-        
-        axes[0].imshow(img1, extent=[0, lbox, 0, lbox],origin='lower')
-        axes[0].set_xlabel('pc', fontsize=15)
-        axes[0].set_title('t=%.2f Myr'%(self.time), fontsize=18)
-
-        #-------- create cmaps:
-        density_array = 10 ** np.linspace(vmin, vmax, 100)
-        temperature_array = 10 ** np.linspace(4, t_up, 100)
-        jet_array = 10 ** np.linspace(-5, 0, 100)
-        Density_cmap, Temperature_cmap = np.meshgrid(density_array, temperature_array, indexing='ij')
-        Density_cmap, Jet_cmap = np.meshgrid(density_array, jet_array, indexing='ij')
-        
-        cmap_density_temperature = color.CoolWarm(color.NL(Temperature_cmap, range=(t_low, t_up)), color.NL(Density_cmap, range=(vmin, vmax)))
-
-        axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)), extent=[vmin, vmax, t_up, 3], aspect=4.1)
-        axes[1].set_ylabel('log (temperature [K])', labelpad=4)
-        axes[1].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
-        axes[1].yaxis.tick_right()
-        axes[1].yaxis.set_label_position('right')
     
-        if savefig_file != None:
-            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
-        if show == True:
-            plt.show()
-        else: 
-            plt.close()
-
-        return f
-
     def overlap_sfr(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, 
                     range=(-5, 0), vmin=None, vmax=None, weight='sfr'):
         """
