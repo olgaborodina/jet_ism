@@ -624,7 +624,8 @@ class snapshot:
             f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
             f.subplots_adjust(hspace=0.3)
             axes[0].imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-            axes[0].scatter(stars_coords[0] - coord_shift[0], stars_coords[1] - coord_shift[1], 
+            if len(stars_mass) > 0:
+                axes[0].scatter(stars_coords[0] - coord_shift[0], stars_coords[1] - coord_shift[1], 
                             c='yellow', s=25 * (stars_mass / stars_mass.max()) ** 2, marker='*')
             axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
 
@@ -655,7 +656,8 @@ class snapshot:
         else:
             f,ax = plt.subplots(1, 1, figsize=(5,5))            
             ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-            ax.scatter(stars_coords[0]- coord_shift[0], stars_coords[1]- coord_shift[1], 
+            if len(stars_mass) > 0:
+                ax.scatter(stars_coords[0]- coord_shift[0], stars_coords[1]- coord_shift[1], 
                             c='yellow', s=25 * (stars_mass / stars_mass.max()) ** 2, marker='*')
             ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
             
