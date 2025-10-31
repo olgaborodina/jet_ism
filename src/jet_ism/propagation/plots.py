@@ -5,6 +5,7 @@ from matplotlib import animation
 import matplotlib as mpl
 import numpy as np
 
+
 def jet_distances_paper1(distance_info_turb, distance_info_uniform, distance_info_uniform_dilute, distance_min=0, distance_max=750, title=r'jet power $10^{40}$ erg/s'):
     """
     Make plot of jet distances for three different environments
@@ -95,10 +96,11 @@ def jet_rampressure(ram_pressure_list_parallel, jet_tracer_fall_x_parallel_left,
         plt.show()
     plt.close()
 
+def jet_percentiles(percentile_evolution, label, color):
+    dist, times, fractions = percentile_evolution
+    return [dist, times, fractions, label, color]
 
-def jet_distances(dist_list, fractions_list,  
-                  times_list, labels_list, 
-                  colors_list, title=r'jet power $10^{40}$ erg/s'):
+def jet_evolution(jet_percentiles_list, title=r'jet power $10^{40}$ erg/s'):
     """
     Make plot of jet distances with shading for fractions of jet material
     Input: dist_list        (list of outputs of the function percentile_distance_3 for different simulations)
@@ -111,22 +113,23 @@ def jet_distances(dist_list, fractions_list,
     
     fig, ax = plt.subplots(figsize=(4.5,3.2))
 
-    for i in range(len(fractions_list)):
-        cmap = shading_cmaps(colors_list[i])
+    for i in range(len(jet_percentiles_list)):
+        dist, times, fractions, label, color = jet_percentiles_list[i]
+        cmap = shading_cmaps(color)
     
     
-        plt.imshow(fractions_list[i], cmap=cmap, extent=(0, times_list[i].max()-times_list[i].min(), 
-                    dist_list[i].max(), dist_list[i].min()), vmin=0.5, vmax=1, aspect='auto')
+        plt.imshow(fractions, cmap=cmap, extent=(0, times.max()-times.min(), 
+                    dist.max(), dist.min()), vmin=0.5, vmax=1, aspect='auto')
         dist_list_80 = []
         dist_list_100 = []
-        for snap in range(len(fractions_list[i][0, :])):
-            close_to_80 = abs(fractions_list[i][:, snap] - 0.80).argmin()
-            close_to_100 = abs(fractions_list[i][:, snap] - 1.0).argmin()
-            dist_list_80.append(dist_list[i][close_to_80])
-            dist_list_100.append(dist_list[i][close_to_100])
+        for snap in range(len(fractions[0, :])):
+            close_to_80 = abs(fractions[:, snap] - 0.80).argmin()
+            close_to_100 = abs(fractions[:, snap] - 1.0).argmin()
+            dist_list_80.append(dist[close_to_80])
+            dist_list_100.append(dist[close_to_100])
 
-        ax.plot(times_list[i]-times_list[i].min(), dist_list_80, c=colors_list[i], ls='--', lw=2)
-        ax.plot(times_list[i]-times_list[i].min(), dist_list_100, c=colors_list[i], ls='-', lw=5, label=labels_list[i])
+        ax.plot(times-times.min(), dist_list_80, c=color, ls='--', lw=2)
+        ax.plot(times-times.min(), dist_list_100, c=color, ls='-', lw=5, label=label)
        
     ax.set_title(title)
     ax.set_xlabel('t [Myr]', fontsize=10)
