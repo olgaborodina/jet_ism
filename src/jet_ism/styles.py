@@ -78,6 +78,7 @@ def background(color, full=False):
           "axes.labelcolor" : "w",
           "axes.edgecolor" : "w",
           "text.color" : "w",
+          "legend.labelcolor": "black",
                  # 'boxplot.whiskerprops.color': 'white', ###
                  # 'boxplot.boxprops.color': 'white',
                  # 'boxplot.capprops.color': 'white',
@@ -86,5 +87,6 @@ def background(color, full=False):
                  }
         plt.rcParams.update(params)
     if full == True:
-        params = {"axes.facecolor" : color}    
+        params = {"axes.facecolor" : color,
+                 "legend.labelcolor": "w"}    
         plt.rcParams.update(params)
