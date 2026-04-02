@@ -131,4 +131,13 @@ def calculate_thermal_pressure(snap_data):
     thermal_pressure = temperature * number_density * BOLTZMANN
 
     return thermal_pressure
+
+def calculate_soundspeed_from_T(T, gamma=GAMMA):
+    """
+    Calculate speed of sound for all cells in file
+    Input: temperature in K, 
+           gamma (adiabatic index, unitless, default is GAMMA), 
+    Output: speed of sound in cm/s
+    """
+    return np.sqrt(gamma * T * BOLTZMANN / PROTONMASS/ mu)
     
