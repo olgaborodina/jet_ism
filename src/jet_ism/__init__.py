@@ -14,7 +14,7 @@ __all__ = [
     'get_time_from_snap', 'get_output_directory',
     'megayear', 'h', 'unit_velocity', 'unit_length', 'unit_mass', 'unit_energy',
     'unit_density', 'unit_time', 'unit_time_in_megayr', 'mu',
-    'PROTONMASS', 'BOLTZMANN', 'GRAVITY', 'LIGHTSPEED', 'sigma_T', 'rho_to_numdensity', 'GAMMA'
+    'PROTONMASS', 'BOLTZMANN', 'GRAVITY', 'LIGHTSPEED', 'sigma_T', 'sigma_B', 'rho_to_numdensity', 'GAMMA'
 ]
 
 # Global constants
@@ -40,7 +40,8 @@ PROTONMASS = np.float64(1.67262178e-24)
 BOLTZMANN = np.float64(1.38065e-16)
 GRAVITY = np.float64(6.6738e-8) # G in cgs
 LIGHTSPEED = np.float64(3e10)  #cm/s
-sigma_T = 6.6524e-25                      # cm^2, Thomson scattering cross-section for the electron 
+sigma_T = 6.6524e-25                      # cm^2, Thomson scattering cross-section for the electron
+sigma_B =  5.6704e-5                      # erg cm^-2 s^-1 K^-4 constant in the Stefan-Boltzmann law  
 rho_to_numdensity = 1. * unit_density / (mu * PROTONMASS) # to cm^-3
 
 GAMMA = 5 / 3
