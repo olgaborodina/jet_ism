@@ -4,7 +4,9 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_density, rho_to_numdensity, unit_time_in_megayr)
+from scipy.interpolate import RegularGridInterpolator
+
+from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_density, rho_to_numdensity, unit_time_in_megayr, megayear)
 
 
 def get_temp(snap_data, gamma=GAMMA, approach='local'):
@@ -140,4 +142,42 @@ def calculate_soundspeed_from_T(T, gamma=GAMMA):
     Output: speed of sound in cm/s
     """
     return np.sqrt(gamma * T * BOLTZMANN / PROTONMASS/ mu)
+
+
+def calculate_gas_tcool(T, rho, metallicity, Z_a=0, cap=True):
+        """
+        u and rho in code unit
+        return cooling time in Myr
+        checked from snapshot to see if it is consistent with Utherm/coolrate
+        """
+        data = np.load('./Lambda_tab.npz')
+        Lambda_tab = data['Lambda_tab']
+        redshifts  = data['redshifts']
+        Zs         = data['Zs']
+        log_Tbins  = data['log_Tbins']
+        log_nHbins = data['log_nHbins']
+        Lambda      = RegularGridInterpolator((log_nHbins,log_Tbins,Zs,redshifts),
+                                            Lambda_tab, bounds_error=False, fill_value=0)
+        x_h = 0.76
+        muH = 1./x_h
+        #-------------------------------------------
+        nH = rho * rho_to_numdensity
+        lognH = np.log10(nH)
+
+        logT = np.log10(T)
+
+        if cap == True:
+            lognH[lognH >max(log_nHbins)]=max(log_nHbins)
+            lognH[lognH <min(log_nHbins)]=min(log_nHbins)
+            logT[logT>max(log_Tbins)]=max(log_Tbins)
+            logT[logT<min(log_Tbins)]=min(log_Tbins)
+            metallicity[metallicity>max(Zs)] = max(Zs)
+            metallicity[metallicity<min(Zs)] = min(Zs)
+
+        Edotcool = nH * Lambda((lognH,logT,metallicity,Z_a))
+        Edotcool[Edotcool == 0] = 1e-20
+        tcool = ((muH/mu)**2)* 1.5*(BOLTZMANN*T)/Edotcool
+
+        return tcool/megayear # in Myr
+
     
