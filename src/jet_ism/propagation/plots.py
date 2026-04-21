@@ -100,7 +100,7 @@ def jet_percentiles(percentile_evolution, label, color):
     dist, times, fractions = percentile_evolution
     return [dist, times, fractions, label, color]
 
-def jet_evolution(jet_percentiles_list, title=r'jet power $10^{40}$ erg/s'):
+def jet_evolution(jet_percentiles_list, title=r'jet power $10^{40}$ erg/s', distance_max=None, t_max=None):
     """
     Make plot of jet distances with shading for fractions of jet material
     Input: dist_list        (list of outputs of the function percentile_distance_3 for different simulations)
@@ -133,8 +133,16 @@ def jet_evolution(jet_percentiles_list, title=r'jet power $10^{40}$ erg/s'):
        
     ax.set_title(title)
     ax.set_xlabel('t [Myr]', fontsize=10)
-    ax.set_xlim(0, 5)
-    ax.set_ylim(0, 750)
+    if t_max == None:
+        ax.set_xlim(0, times.max()-times.min())
+    else:
+        ax.set_xlim(0, t_max)
+        
+    if distance_max == None:
+        ax.set_ylim(0, 750)
+    else:
+        ax.set_ylim(0, dist.max())
+    
     ax.grid(ls='--', c='gray', alpha=0.4, zorder=0)
     ax.set_ylabel(r'$r$ [pc]', fontsize=10, zorder=100)
     

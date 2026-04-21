@@ -6,7 +6,7 @@ from pathlib import Path
 from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_time_in_megayr)
 
 
-def volume_fraction(output_directory, i_file=11, threshold_tracer=1e-3):
+def volume_fraction(output_directory, kpc=True,  i_file=11, threshold_tracer=1e-3):
     """
     Create a table with jet tracer volume fraction and central density evolution with time
     Input: output_directory (directory with the simulation outputs)
@@ -29,13 +29,15 @@ def volume_fraction(output_directory, i_file=11, threshold_tracer=1e-3):
             except:
                 break
         time = get_time_from_snap(snap_data) * unit_time_in_megayr
-        x, y, z = snap_data['PartType0/Coordinates'][:].T
-        center = snap_data['Header'].attrs['BoxSize'] / 2
-        
-        mask = (np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2) < 500)
-        
-        volume = snap_data['PartType0/Masses'][:][mask] / snap_data['PartType0/Density'][:][mask]
-        tracer = snap_data['PartType0/Jet_Tracer'][:][mask]
+        if kpc==True:
+            x, y, z = snap_data['PartType0/Coordinates'][:].T
+            center = snap_data['Header'].attrs['BoxSize'] / 2
+            mask = (np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2) < 500)
+            volume = snap_data['PartType0/Masses'][:][mask] / snap_data['PartType0/Density'][:][mask]
+            tracer = snap_data['PartType0/Jet_Tracer'][:][mask]
+        else:
+            volume = snap_data['PartType0/Masses'][:] / snap_data['PartType0/Density'][:]
+            tracer = snap_data['PartType0/Jet_Tracer'][:]           
         jet_volume = volume[tracer > threshold_tracer]
         jet_volume_fraction = np.sum(jet_volume) / np.sum(volume)
         result.append([time, jet_volume_fraction])
