@@ -4,7 +4,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_density, rho_to_numdensity, unit_time_in_megayr)
+from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, unit_mass, unit_density, rho_to_numdensity, unit_time_in_megayr)
 
 
 def get_mass(output_directory, onekpc=False):
@@ -28,7 +28,7 @@ def get_mass(output_directory, onekpc=False):
         try: 
             x,y,z = snap_data['PartType4/Coordinates'][:].T
             masses = snap_data['PartType4/Masses'][:]
-            center = snap_data['Header'].attrs['BoxSize'] / 2
+            center = get_center(snap_data)
             
             if onekpc == True:
                 mask = ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)

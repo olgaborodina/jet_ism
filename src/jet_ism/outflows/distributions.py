@@ -8,7 +8,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
+from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, rho_to_numdensity, TEMP_HOT_MIN, TEMP_WARM_MIN)
 
 from ..gas.general import (get_temp)
 
@@ -38,7 +38,7 @@ def calculate_distribution(output_directory, snapshot_number, velmin=-900, velma
 
     x, y, z = snap_data['PartType0/Coordinates'][:].T
     vx, vy, vz = snap_data['PartType0/Velocities'][:].T
-    center = snap_data['Header'].attrs['BoxSize'] / 2
+    center = get_center(snap_data)
     v_r = (vx * (x - center) + vy * (y - center) + vz * (z - center)) / \
                 np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2)
 
@@ -48,9 +48,9 @@ def calculate_distribution(output_directory, snapshot_number, velmin=-900, velma
     volumes = masses / densities
     radius = np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2)
 
-    mask_hot  = ((temperatures > 10 ** 4.4) & (radius > 400) & (radius < 500))
-    mask_warm = ((temperatures > 10 ** 3.7) & (temperatures < 10 ** 4.4) & (radius > 400) & (radius < 500))
-    mask_cold = ((temperatures < 10 ** 3.7) & (radius > 400) & (radius < 500))
+    mask_hot  = ((temperatures > TEMP_HOT_MIN) & (radius > 400) & (radius < 500))
+    mask_warm = ((temperatures > TEMP_WARM_MIN) & (temperatures < TEMP_HOT_MIN) & (radius > 400) & (radius < 500))
+    mask_cold = ((temperatures < TEMP_WARM_MIN) & (radius > 400) & (radius < 500))
 
     velocities_hot = np.histogram((v_r[mask_hot]), bins=bins, weights=masses[mask_hot] / bins_step)[0]
     velocities_warm = np.histogram((v_r[mask_warm]), bins=bins, weights=masses[mask_warm] / bins_step)[0]
@@ -93,7 +93,7 @@ def calculate_distribution_average(output_directory, t_start, velmin=-900, velma
         
         x, y, z = snap_data['PartType0/Coordinates'][:].T
         vx, vy, vz = snap_data['PartType0/Velocities'][:].T
-        center = snap_data['Header'].attrs['BoxSize'] / 2
+        center = get_center(snap_data)
         v_r = (vx * (x - center) + vy * (y - center) + vz * (z - center)) / \
                     np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2)
     
@@ -103,9 +103,9 @@ def calculate_distribution_average(output_directory, t_start, velmin=-900, velma
         volumes = masses / densities
         radius = np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2)
     
-        mask_hot  = ((temperatures > 10 ** 4.4) & (radius > 400) & (radius < 500))
-        mask_warm = ((temperatures > 10 ** 3.7) & (temperatures < 10 ** 4.4) & (radius > 400) & (radius < 500))
-        mask_cold = ((temperatures < 10 ** 3.7) & (radius > 400) & (radius < 500))
+        mask_hot  = ((temperatures > TEMP_HOT_MIN) & (radius > 400) & (radius < 500))
+        mask_warm = ((temperatures > TEMP_WARM_MIN) & (temperatures < TEMP_HOT_MIN) & (radius > 400) & (radius < 500))
+        mask_cold = ((temperatures < TEMP_WARM_MIN) & (radius > 400) & (radius < 500))
     
         velocities_hot.append(np.histogram((v_r[mask_hot]), bins=bins, weights=masses[mask_hot] / bins_step)[0])
         velocities_warm.append(np.histogram((v_r[mask_warm]), bins=bins, weights=masses[mask_warm] / bins_step)[0])

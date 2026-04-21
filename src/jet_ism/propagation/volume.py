@@ -3,7 +3,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_time_in_megayr)
+from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, unit_mass, unit_time_in_megayr)
 
 
 def volume_fraction(output_directory, kpc=True,  i_file=11, threshold_tracer=1e-3):
@@ -31,7 +31,7 @@ def volume_fraction(output_directory, kpc=True,  i_file=11, threshold_tracer=1e-
         time = get_time_from_snap(snap_data) * unit_time_in_megayr
         if kpc==True:
             x, y, z = snap_data['PartType0/Coordinates'][:].T
-            center = snap_data['Header'].attrs['BoxSize'] / 2
+            center = get_center(snap_data)
             mask = (np.sqrt((x - center) ** 2 + (y - center) ** 2 + (z - center) ** 2) < 500)
             volume = snap_data['PartType0/Masses'][:][mask] / snap_data['PartType0/Density'][:][mask]
             tracer = snap_data['PartType0/Jet_Tracer'][:][mask]

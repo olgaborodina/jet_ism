@@ -5,7 +5,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
+from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, rho_to_numdensity)
 
 from ..gas.general import (get_temp)
 
@@ -20,7 +20,7 @@ def mass_flux(snapshot, projection='radial', weights='full'):
     snapshot = h5py.File(directory + filename, "r")
     x, y, z = snapshot['PartType0/Coordinates'][:].T
     vx, vy, vz = snapshot['PartType0/Velocities'][:].T
-    center = 0.5 * snapshot.header.BoxSize
+    center = get_center(snapshot)
     v_r = (vx * (x - center) + vy * (y - center) + vz * (z - center)) / np.sqrt((x - center) ** 2 +(y - center) ** 2 + (z - center) ** 2)
     if projection == 'radial':
         j = snapshot['PartType0/Density'][:] * v_r #* unit_density * unit_velocity

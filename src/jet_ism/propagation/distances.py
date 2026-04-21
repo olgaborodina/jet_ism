@@ -3,7 +3,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_time_in_megayr)
+from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, unit_mass, unit_time_in_megayr)
 
 
 def weighted_percentile(data, weights, perc):
@@ -44,7 +44,7 @@ def percentile_distance_3(output_directory, i_file=12):
             except:
                 break
                 
-        center = snap_data['Header'].attrs['BoxSize'] / 2       
+        center = get_center(snap_data)       
         x = snap_data['PartType0/Coordinates'][:, 0] - center
         y = snap_data['PartType0/Coordinates'][:, 1] - center
         z = snap_data['PartType0/Coordinates'][:, 2] - center
@@ -96,7 +96,7 @@ def percentile_evolution(output_directory, distance_min=0, distance_max=750, N_s
                 snap_data = h5py.File(output_directory + filename, "r")
             except:
                 break
-        center = snap_data['Header'].attrs['BoxSize'] / 2
+        center = get_center(snap_data)
         x = snap_data['PartType0/Coordinates'][:, 0] - center
         y = snap_data['PartType0/Coordinates'][:, 1] - center
         z = snap_data['PartType0/Coordinates'][:, 2] - center

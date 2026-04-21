@@ -6,7 +6,7 @@ import h5py    # hdf5 format
 from pathlib import Path
 from scipy.interpolate import RegularGridInterpolator
 
-from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_density, rho_to_numdensity, unit_time_in_megayr, megayear)
+from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, unit_mass, unit_density, rho_to_numdensity, unit_time_in_megayr, megayear, TEMP_HOT_MIN, TEMP_WARM_MIN)
 
 
 def get_temp(snap_data, gamma=GAMMA, approach='local'):
@@ -87,17 +87,17 @@ def get_mass_of_phases(output_directory, onekpc=False):
         temperatures = get_temp(snap_data, GAMMA)
         x,y,z = snap_data['PartType0/Coordinates'][:].T
         masses = snap_data['PartType0/Masses'][:]
-        center = snap_data['Header'].attrs['BoxSize'] / 2
+        center = get_center(snap_data)
         
         if onekpc == True:
-            mask_hot = (temperatures > 10**4.4) & ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)
-            mask_warm = (temperatures < 10**4.4) & (temperatures > 10**3.7) & ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)
-            mask_cold = (temperatures < 10**3.7) & ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)
+            mask_hot = (temperatures > TEMP_HOT_MIN) & ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)
+            mask_warm = (temperatures < TEMP_HOT_MIN) & (temperatures > TEMP_WARM_MIN) & ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)
+            mask_cold = (temperatures < TEMP_WARM_MIN) & ((x - center) > 500) & ((x - center) < 1500) & ((y - center) > 500) & ((y - center) < 1500) & ((z - center) > 500) & ((z - center) < 1500)
 
         elif onekpc == False:
-            mask_hot = (temperatures > 10**4.4)
-            mask_warm = (temperatures < 10**4.4) & (temperatures > 10**3.7) 
-            mask_cold = (temperatures < 10**3.7)
+            mask_hot = (temperatures > TEMP_HOT_MIN)
+            mask_warm = (temperatures < TEMP_HOT_MIN) & (temperatures > TEMP_WARM_MIN) 
+            mask_cold = (temperatures < TEMP_WARM_MIN)
         else:
             raise ValueError("Invalid onekpc option, must be True or False")
         
@@ -114,7 +114,7 @@ def calculate_ram_pressure(snap_data):
     vx, vy, vz = snap_data['PartType0/Velocities'][:].T
     density = snap_data['PartType0/Density'][:]
 
-    center = 0.5 * snap_data["Header"].attrs["BoxSize"]
+    center = get_center(snap_data)
     v_total_sq = vx ** 2 + vy ** 2 + vz ** 2
 
     ram_pressure = density * v_total_sq * unit_density * unit_velocity * unit_velocity

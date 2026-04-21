@@ -11,10 +11,11 @@ import glob
 
 __all__ = [
     'outflows', 'maps', 'gas', 'stars', 'blackholes', 'propagation', 'styles',
-    'get_time_from_snap', 'get_output_directory',
+    'get_time_from_snap', 'get_center', 'get_center_vec', 'get_output_directory',
     'megayear', 'h', 'unit_velocity', 'unit_length', 'unit_mass', 'unit_energy',
     'unit_density', 'unit_time', 'unit_time_in_megayr', 'mu',
-    'PROTONMASS', 'BOLTZMANN', 'GRAVITY', 'LIGHTSPEED', 'sigma_T', 'sigma_B', 'rho_to_numdensity', 'GAMMA'
+    'PROTONMASS', 'BOLTZMANN', 'GRAVITY', 'LIGHTSPEED', 'sigma_T', 'sigma_B', 'rho_to_numdensity', 'GAMMA',
+    'TEMP_HOT_MIN', 'TEMP_WARM_MIN',
 ]
 
 # Global constants
@@ -45,6 +46,17 @@ sigma_B =  5.6704e-5                      # erg cm^-2 s^-1 K^-4 constant in the 
 rho_to_numdensity = 1. * unit_density / (mu * PROTONMASS) # to cm^-3
 
 GAMMA = 5 / 3
+
+# Gas phase temperature boundaries [K]
+TEMP_HOT_MIN  = 10 ** 4.4   # hot:  T > TEMP_HOT_MIN
+TEMP_WARM_MIN = 10 ** 3.7   # warm: TEMP_WARM_MIN < T <= TEMP_HOT_MIN; cold: T <= TEMP_WARM_MIN
+
+def get_center(snap_data):
+    return snap_data['Header'].attrs['BoxSize'] / 2
+
+def get_center_vec(snap_data):
+    c = get_center(snap_data)
+    return np.array([c, c, c])
 
 def get_time_from_snap(snap_data):
     """

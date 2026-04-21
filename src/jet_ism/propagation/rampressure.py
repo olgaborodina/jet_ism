@@ -3,7 +3,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, unit_mass, unit_time_in_megayr, unit_density)
+from .. import (unit_velocity, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_center, get_center_vec, unit_mass, unit_time_in_megayr, unit_density)
 from ..gas.general import calculate_ram_pressure
 
 import tqdm
@@ -74,7 +74,7 @@ def calculate_rampressure_jet_axis(output_directory, i_file, f_file, jet_tracer_
         density = snap_data['PartType0/Density'][:]
         ram_pressure = calculate_ram_pressure(snap_data)
         jet_tracer = snap_data['PartType0/Jet_Tracer'][:]
-        center = np.array([0.5 * snap_data["Header"].attrs["BoxSize"]] * 3)
+        center = get_center_vec(snap_data)
         
         pool = Pool(nkernels)
 
@@ -142,7 +142,7 @@ def calculate_rampressure_only(output_directory, i_file, f_file, dmin=30, dmax=5
         vx, vy, vz = snap_data['PartType0/Velocities'][:].T
         density = snap_data['PartType0/Density'][:]
         ram_pressure = calculate_ram_pressure(filename)
-        center = 0.5 * snap_data["Header"].attrs["BoxSize"]
+        center = get_center(snap_data)
     
         pool = Pool(32)
         ram_pressure_axis = []
