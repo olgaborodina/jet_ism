@@ -18,7 +18,7 @@ from matplotlib.colors import ListedColormap,colorConverter
 from matplotlib.collections import LineCollection
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 
-from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
+from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity, megayear)
 from .base import *
 from ..gas.general import *
 
@@ -365,3 +365,57 @@ def get_channel_stars(file, center, lbox, slab_width=None,
         coords = [y, z]
 
     return coords, mass
+
+
+def get_channel_coolingtime(file, center, lbox, slab_width=None, cooltimecolumn=-1,
+                    imsize=2000, smlfac=1.0, orientation='xy', weight='none', postprocessing=False):
+    """
+    Get channels of the star formation rate (SFR)
+    Input: file (filename, including directory)
+           center (3-vector, center of the box)
+           lbox (float, box length) 
+           slab_width (float, projection depth, default is lbox)
+           jetcolumn (int, if jet tracer is a vector, which column to use, default is -1, the last column)
+           imsize (int, image size, default is 2000)  
+           smlfac (float, smoothing length factor, default is 1.0)
+           orientation (string, projection of 'xy','yz','xz', default is 'xy')
+           weight (string, 'mass' or 'sfr', default is 'sfr', whether to return mass weighted jet tracer or just jet tracer)
+    Output: channels (2, imsize, imsize), channels[0]: column density, channels[1]: weighted sfr
+    """
+    if slab_width is None:
+        slab_width = lbox
+    
+    part = h5py.File(file,'r')
+    mask, gaspos= cut(part['PartType0'], center, lbox, slab_width, orientation)
+    
+    gasm = part['PartType0/Masses'][:][mask]
+    gasvol = gasm / part['PartType0/Density'][:][mask]
+    gassl = smlfac * (gasvol ** (1/3))
+
+    if postprocessing == False:
+        cool_rate = part['PartType0/CoolingRate'][:][mask] * unit_time_in_megayr
+        cool_rate[cool_rate == 0] = 1e-20
+        gascooltime = part['PartType0/InternalEnergy'][:][mask] / cool_rate
+    elif postprocessing == True:
+        gascooltime = calculate_gas_tcool(get_temp(part, GAMMA)[mask],  
+                    part['PartType0/Density'][mask], 
+                    np.zeros_like(part['PartType0/Density'][mask]), Z_a=0, cap=True)
+    
+    if len(gascooltime.shape) > 1:
+        gascooltime = gascooltime[:, cooltimecolumn]    
+    gascooltime[gascooltime< 1e-20] = 1e-20  # avoid log(0)
+        
+    p_resolution = lbox / imsize
+    psml = gassl / p_resolution
+    psml[psml < 1] = 1
+    
+    #---------------------------------------
+    gasdev = pos2device(gaspos,lbox,slab_width,imsize,orientation) 
+    if weight=='mass':
+        channels = painter.paint(gasdev, psml, [gasm, gasm * gascooltime], (imsize, imsize), np=8)    
+        channels[1] /= channels[0]
+    elif weight=='none':
+        channels = painter.paint(gasdev, psml, [gasm, gascooltime], (imsize, imsize), np=8)
+    else:
+        raise NotImplementedError
+    return channels

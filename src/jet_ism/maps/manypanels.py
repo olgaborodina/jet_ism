@@ -234,9 +234,11 @@ class snapshot2:
         except: print("Can't save file")
         if show == True:
             plt.show()
+            return f
         else: 
+            return f
             plt.close()
-        return f
+ 
 
 
 def overlap2_jet_temp_gif(figures_directory, lbox, slab_width, timestep=4):

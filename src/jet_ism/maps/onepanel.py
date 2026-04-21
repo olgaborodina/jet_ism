@@ -1,9 +1,10 @@
-from .. import (unit_velocity, unit_length, unit_mass, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
+from .. import (unit_velocity, unit_length, unit_mass, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity, megayear)
 from .base import *
 from ..gas.general import *
 from .get_channel import *
 
 import matplotlib.font_manager as fm
+from matplotlib.patches import Circle
 
 class snapshot:
     """
@@ -33,7 +34,6 @@ class snapshot:
         BoxSize = part['Header'].attrs['BoxSize']
         self.BoxSize = BoxSize
         self.center = np.array([0.5 * BoxSize, 0.5 * BoxSize, 0.5 * BoxSize])
-
                 
     def overlap_jet(self, lbox, slab_width=None, imsize=2000, orientation='xy', 
                     show=True, range=(-5,0), vmin=None, vmax=None, center=None):
@@ -347,7 +347,7 @@ class snapshot:
         elif showbar=='right':
             f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
             axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
-            axes[0].set_title('t=%.2f Myr'%(self.time), fontsize=18)
+            axes[0].set_title('t=%.2f Myr'%(self.time -t0), fontsize=18)
 
             scalebar = AnchoredSizeBar(axes[0].transData,
                            200, '200 pc', 'lower center', 
@@ -361,7 +361,7 @@ class snapshot:
             axes[0].set_xticks([])
             axes[0].set_yticks([]) 
     
-            axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)), extent=[vmin, vmax, t_up, 3], aspect=4.1)
+            axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)), extent=[vmin, vmax, t_up, t_low], aspect=4.1)
             axes[1].set_ylabel('log (temperature [K])', labelpad=4)
             axes[1].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
             axes[1].yaxis.tick_right()
@@ -406,6 +406,7 @@ class snapshot:
                 plt.show()
             else: 
                 plt.close()
+        else: raise ValueError('showbar can be bottom, right, blank or none')
         return f
 
     def overlap_sigma_velocity(self,lbox,slab_width=None,imsize=2000,orientation='xy', show=True):
@@ -680,3 +681,233 @@ class snapshot:
         else: 
             plt.close()
         return f
+
+    def overlap_coolingtime(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, showbar=True,
+                    range=(-1, 5), vmin=None, vmax=None, weight='none', t0=0, postprocessing=False):
+        """
+        plot SFR map overlaid on top of gas density+temp map
+        
+        Parameters
+        ----------
+        lbox: box length
+        slab_width: projection depth
+        orientation: projection of 'xy','yz','xz'
+        imsize: Npixel of the image
+        show: whether to show the plot, boolean, default True
+        range: color range for the SFR map in log scale, default (-5,0)
+        vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
+        weight: weighting for the SFR map, 'mass' or 'sfr', default 'sfr'
+        """
+        BoxSize = self.BoxSize
+        center = self.center
+
+        cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
+        cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
+        t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
+        
+        # cooling time
+        channels = get_channel_coolingtime(self.fn, center=center, lbox=lbox, slab_width=slab_width,
+                                   imsize=imsize, orientation=orientation, postprocessing=postprocessing,  weight=weight,)
+        x = channels[0][channels[0]>0]
+        vmin0, vmax0 = np.log10(np.percentile(x,1)),np.log10(np.percentile(x,99))
+        if vmin == None:
+            vmin = vmin0
+        if vmax == None:
+            vmax = vmax0
+        img1 = color.CoolWarm(color.NL(cn1, range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
+        
+
+        img2 = jetmap(color.NL(channels[1], range=range), color.NL(cn0, range=(-7, -6)))
+
+        cooltime_array = 10 ** np.linspace(range[0], range[1], 100)
+        density_array = 10 ** np.linspace(vmin,vmax, 100)
+        Density_cmap, Cooltime_cmap = np.meshgrid(density_array, cooltime_array, indexing='ij')
+        cmap_cooltime = jetmap(color.NL(Cooltime_cmap, range=range),color.NL(np.ones_like(Density_cmap) * 1e-6, range=(-7,-6)))
+
+        fontprop = fm.FontProperties(size=12)
+        if showbar=='bottom':
+            f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.1], figsize=(5.2, 5 / 0.7))
+            f.subplots_adjust(hspace=0.1)
+            axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
+
+            scalebar = AnchoredSizeBar(axes[0].transData,
+                           200, '200 pc', 'lower center', 
+                           pad=0.2,
+                           color='white',
+                           frameon=False,
+                           size_vertical=1.5,
+                           fontproperties=fontprop,
+                           sep=3)
+            axes[0].add_artist(scalebar)
+            axes[0].set_xticks([])
+            axes[0].set_yticks([])            
+            
+            axes[1].imshow(cmap_cooltime, extent=[range[0], range[1], range[0], range[1]], aspect=0.055)
+            axes[1].set_xlabel(r'$\log{t_\text{cool}}$', labelpad=2, fontsize=13)
+            axes[1].set_yticklabels([])
+            axes[1].set_yticks([])
+
+            try:
+                plt.savefig(savefig_file)
+            except: print("Can't save file")
+                
+            if show == True:
+                plt.show()
+            else: 
+                plt.close()
+
+        return f
+
+
+def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom', show_BH=False,
+                    show=True, vmin=None, vmax=None, center=None, savefig_file=None, t0=15, range_jet=(1e-4,2e-4), levels=1, 
+                        contour_color='lightpink'):
+    assert abs(snapshot_jet.time - snapshot_turb.time) < 0.03
+    if snapshot_turb.BoxSize == snapshot_jet.BoxSize:
+        BoxSize = snapshot_turb.BoxSize
+    else:
+        raise('box sizes are not the same')
+    
+    if center == None:
+        if snapshot_turb.center.all() == snapshot_jet.center.all():
+            center = snapshot_turb.center
+        else:
+            raise('center is not the same for the snapshots, specify it as an argument')
+
+
+    cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
+    cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
+    t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
+    
+    # gas rho temp
+    channels = get_channel_gas_rhotemp(snapshot_turb.fn,center=center,lbox=lbox,slab_width=slab_width,
+                               imsize=imsize,orientation=orientation)
+    x = channels[0][channels[0] > 0]
+    vmin0, vmax0 = np.log10(np.percentile(x, 1)), np.log10(np.percentile(x, 99))
+    if vmin == None:
+        vmin = vmin0
+    if vmax == None:
+        vmax = vmax0
+    img1 = color.CoolWarm(color.NL(cn1, range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
+    
+    # jet tracer
+    channels_jet = get_channel_jet_tracer(snapshot_jet.fn, center=center, lbox=lbox, slab_width=slab_width,
+                                      imsize=imsize, jetcolumn=-1, orientation=orientation)
+    channels_jet[channels_jet < range_jet[0]] = 1e-24
+    channels_jet[channels_jet > range_jet[1]] = 1e-24
+
+    density_array = 10 ** np.linspace(vmin, vmax, 100)
+    jet_array = 10 ** np.linspace(range_jet[0], range_jet[1], 100)
+    Density_cmap, Jet_cmap = np.meshgrid(density_array, jet_array, indexing='ij')
+    cmap_density = color.CoolWarm(color.NL(np.ones_like(Jet_cmap) * 10 ** np.mean(range_jet),range=range_jet),color.NL(Density_cmap.T, range=(vmin,vmax)))
+
+    #---------
+    fontprop = fm.FontProperties(size=12)
+
+    if showbar=='bottom':
+        f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.1], figsize=(5.2, 5 /0.7))
+        axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
+        axes[0].set_title(r'$t=$%.2f Myr'%(snapshot_jet.time - t0), fontsize=18)
+        axes[0].contour(channels_jet[1], extent=[0, lbox, 0, lbox], levels=levels, colors=contour_color, linewidths=1.5)
+        
+        if show_BH:
+            inner = Circle((lbox / 2, lbox / 2), 30, ec='black', fc="none", lw=2, ls= '--')
+            outer = Circle((lbox / 2, lbox / 2), 90, ec='black', fc="none", lw=2, ls= '-')
+            axes[0].add_patch(inner)
+            axes[0].add_patch(outer)
+
+            
+        scalebar = AnchoredSizeBar(axes[0].transData,
+                       200, '200 pc', 'lower center', 
+                       pad=0.2,
+                       color='white',
+                       frameon=False,
+                       size_vertical=1.5,
+                       fontproperties=fontprop,
+                       sep=3)
+        axes[0].add_artist(scalebar)
+        axes[0].set_xticks([])
+        axes[0].set_yticks([])            
+        
+        axes[1].imshow(cmap_density, extent=[vmin, vmax, 0, 1], aspect=0.4)
+        axes[1].set_yticks([])      
+        axes[1].set_xlabel(r'log $\rho$ [$M_\odot$ pc$^{-2}$]', labelpad=2, fontsize=13)
+        plt.tight_layout()
+
+        try:
+            plt.savefig(savefig_file)
+        except: print("Can't save file")
+        if show == True:
+            plt.show()
+        else: 
+            plt.close()
+
+
+    elif showbar=='right':
+        f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.05], gridspec_kw={'wspace': 0.02})            
+        axes[0].imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
+        axes[0].set_title(r'$t=$%.2f Myr'%(snapshot_jet.time - t0), fontsize=18)
+        axes[0].contour(channels_jet[1], extent=[0, lbox, 0, lbox],levels=levels, colors=contour_color, linewidths=1.5)
+
+
+        if show_BH:
+            inner = Circle((lbox / 2, lbox / 2), 30, ec='black', fc="none", lw=2, ls= '--')
+            outer = Circle((lbox / 2, lbox / 2), 90, ec='black', fc="none", lw=2, ls= '-')
+            axes[0].add_patch(inner)
+            axes[0].add_patch(outer)
+                    
+        scalebar = AnchoredSizeBar(axes[0].transData,
+                       200, '200 pc', 'lower center', 
+                       pad=0.2,
+                       color='white',
+                       frameon=False,
+                       size_vertical=1.5,
+                       fontproperties=fontprop,
+                       sep=3)
+        axes[0].add_artist(scalebar)
+        axes[0].set_xticks([])
+        axes[0].set_yticks([])
+        
+        axes[1].imshow(np.transpose(cmap_density, axes=(1, 0, 2)), extent=[t_up, t_low, vmax, vmin], aspect=10)
+        axes[1].set_xticks([])    
+        
+        axes[1].set_ylabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
+        axes[1].yaxis.tick_right()
+        axes[1].yaxis.set_label_position('right')
+        #f.subplots_adjust(right=0.92, bottom=0.14)
+        # f.tight_layout(rect=[0.0, 0.0, 0.92, 1.0])
+        
+        if savefig_file != None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+        if show == True:
+            plt.show()
+        else: 
+            plt.close()
+
+
+    elif showbar=='none':
+        f,ax = plt.subplots(1, 1, figsize=(5,5))            
+        ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
+        ax.set_title(r'$t=$%.2f Myr'%(snapshot_jet.time - t0), fontsize=18)
+        ax.contour(channels_jet[1], extent=[0, lbox, 0, lbox],levels=levels, colors=contour_color, linewidths=1.5)
+        
+        scalebar = AnchoredSizeBar(ax.transData,
+                       200, '200 pc', 'lower center', 
+                       pad=0.2,
+                       color='white',
+                       frameon=False,
+                       size_vertical=1.5,
+                       fontproperties=fontprop,
+                       sep=3)
+        ax.add_artist(scalebar)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if savefig_file != None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+        if show == True:
+            plt.show()
+        else: 
+            plt.close()
+    else: raise ValueError('showbar can be bottom, right, blank or none')
+    return f
