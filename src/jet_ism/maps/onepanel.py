@@ -6,6 +6,17 @@ from .get_channel import *
 import matplotlib.font_manager as fm
 from matplotlib.patches import Circle
 
+
+def _nice_scalebar_size(lbox):
+    """Return a nice round number ~10% of lbox for use as scalebar size."""
+    target = lbox / 10
+    exp = np.floor(np.log10(target))
+    frac = target / 10 ** exp
+    for nice in [1, 2, 5, 10]:
+        if frac <= nice:
+            return nice * 10 ** exp
+    return 10 * 10 ** exp
+
 class snapshot:
     """
     Snapshot class to read in the snapshot and plot maps
@@ -106,7 +117,7 @@ class snapshot:
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
         center: center of the box, default None (box center)
         """
-        BoxSize = self.BoxSiz
+        BoxSize = self.BoxSize
         if center == None:
             center = self.center
 
@@ -148,8 +159,9 @@ class snapshot:
         return f
 
 
-    def overlap_soundspeed(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, 
-                            showbar=False, range=(4, 5.2), vmin=-2, vmax=2, center=None, savefig_file=None, t0=0):
+    def overlap_soundspeed(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
+                            showbar=False, range=(4, 5.2), vmin=-2, vmax=2, center=None, savefig_file=None, t0=0,
+                            scalebar_size=None, scalebar_label=None):
         """
         plot shock map overlaid on top of gas density+temp map
         
@@ -170,7 +182,11 @@ class snapshot:
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
-        # fontprop = fm.FontProperties(size=12)
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
+        fontprop = fm.FontProperties(size=12)
 
         cn0 = np.ones((imsize,imsize))*1e-6 # dens placeholder
         cn1 = np.ones((imsize,imsize))*1e4 # temp placeholder
@@ -218,17 +234,17 @@ class snapshot:
             axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
 
             scalebar = AnchoredSizeBar(axes[0].transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             axes[0].add_artist(scalebar)
             axes[0].set_xticks([])
-            axes[0].set_yticks([])            
-            
+            axes[0].set_yticks([])
+
             axes[1].imshow(cbar_ss, extent=[ss_low, ss_up,ss_low, ss_up,], aspect=0.055)
             axes[1].set_xlabel(r'sound speed cm/s', labelpad=2)
             axes[1].set_yticks([])
@@ -247,11 +263,11 @@ class snapshot:
             ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
             
             scalebar = AnchoredSizeBar(ax.transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             ax.add_artist(scalebar)
@@ -259,16 +275,17 @@ class snapshot:
             ax.set_yticks([])
             try:
                 plt.savefig(savefig_file)
-            except: print("Can't save file")        
+            except: print("Can't save file")
         if show == True:
             plt.show()
-        else: 
+        else:
             plt.close()
         return f
 
 
-    def overlap_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom', 
-                    show=True, savefig_file=None, t0=0, tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None):
+    def overlap_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom',
+                    show=True, savefig_file=None, t0=0, tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None,
+                    scalebar_size=None, scalebar_label=None):
         """
         plot jet map overlaid on top of gas density+temp map
         
@@ -289,11 +306,15 @@ class snapshot:
         BoxSize = self.BoxSize
         if center==None:
             center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
         cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
         t_low, t_up = tmin, tmax
-        
+
         # gas rho temp
         channels = get_channel_gas_rhotemp(self.fn,center=center,lbox=lbox,slab_width=slab_width,
                                    imsize=imsize,orientation=orientation)
@@ -321,17 +342,17 @@ class snapshot:
             axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
 
             scalebar = AnchoredSizeBar(axes[0].transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             axes[0].add_artist(scalebar)
             axes[0].set_xticks([])
-            axes[0].set_yticks([])            
-            
+            axes[0].set_yticks([])
+
             axes[1].imshow(cmap_density_temperature, extent=[t_low, t_up, vmax, vmin], aspect=0.32)
             axes[1].set_xlabel(r'log $T$ [K]', labelpad=2)
             axes[1].set_ylabel(r'$\log{\rho}$ ' + '\n' + r' [$M_\odot$ pc$^{-2}$])', labelpad=2)
@@ -350,17 +371,17 @@ class snapshot:
             axes[0].set_title('t=%.2f Myr'%(self.time -t0), fontsize=18)
 
             scalebar = AnchoredSizeBar(axes[0].transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             axes[0].add_artist(scalebar)
             axes[0].set_xticks([])
-            axes[0].set_yticks([]) 
-    
+            axes[0].set_yticks([])
+
             axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)), extent=[vmin, vmax, t_up, t_low], aspect=4.1)
             axes[1].set_ylabel('log (temperature [K])', labelpad=4)
             axes[1].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
@@ -377,13 +398,13 @@ class snapshot:
             f,ax = plt.subplots(1, 1, figsize=(5,5))            
             ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
             ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
-            
+
             scalebar = AnchoredSizeBar(ax.transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             ax.add_artist(scalebar)
@@ -393,7 +414,7 @@ class snapshot:
                 plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
             if show == True:
                 plt.show()
-            else: 
+            else:
                 plt.close()
         elif showbar=='blank':
             f,ax = plt.subplots(1, 1, figsize=(5,5))            
@@ -569,8 +590,9 @@ class snapshot:
 
 
 
-    def overlap_temp_stars(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar=False, show=True, savefig_file=None, t0=0, 
-                            tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None, age_cut=False):
+    def overlap_temp_stars(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar=False, show=True, savefig_file=None, t0=0,
+                            tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None, age_cut=False,
+                            scalebar_size=None, scalebar_label=None):
         """
         plot jet map overlaid on top of gas density+temp map
         
@@ -592,11 +614,15 @@ class snapshot:
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize, imsize)) * 1e-6 # dens placeholder
         cn1 = np.ones((imsize, imsize)) * 1e4 # temp placeholder
         t_low, t_up = tmin, tmax
-        
+
         # gas rho temp
         channels = get_channel_gas_rhotemp(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                    imsize=imsize, orientation=orientation)
@@ -631,43 +657,42 @@ class snapshot:
             axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
 
             scalebar = AnchoredSizeBar(axes[0].transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             axes[0].add_artist(scalebar)
             axes[0].set_xticks([])
-            axes[0].set_yticks([])            
-            
+            axes[0].set_yticks([])
+
             axes[1].imshow(cmap_density_temperature, extent=[t_low, t_up, vmax, vmin], aspect=0.32)
             axes[1].set_xlabel(r'log $T$ [K]', labelpad=2)
             axes[1].set_ylabel(r'$\log{\rho}$ ' + '\n' + r' [$M_\odot$ pc$^{-2}$])', labelpad=2)
-
 
             try:
                 plt.savefig(savefig_file)
             except: print("Can't save file")
             if show == True:
                 plt.show()
-            else: 
+            else:
                 plt.close()
         else:
-            f,ax = plt.subplots(1, 1, figsize=(5,5))            
+            f,ax = plt.subplots(1, 1, figsize=(5,5))
             ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
             if len(stars_mass) > 0:
-                ax.scatter(stars_coords[0]- coord_shift[0], stars_coords[1]- coord_shift[1], 
+                ax.scatter(stars_coords[0]- coord_shift[0], stars_coords[1]- coord_shift[1],
                             c='yellow', s=25 * (stars_mass / stars_mass.max()) ** 2, marker='*')
             ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
-            
+
             scalebar = AnchoredSizeBar(ax.transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             ax.add_artist(scalebar)
@@ -675,15 +700,16 @@ class snapshot:
             ax.set_yticks([])
             try:
                 plt.savefig(savefig_file)
-            except: print("Can't save file")        
+            except: print("Can't save file")
         if show == True:
             plt.show()
-        else: 
+        else:
             plt.close()
         return f
 
     def overlap_coolingtime(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, showbar=True,
-                    range=(-1, 5), vmin=None, vmax=None, weight='none', t0=0, postprocessing=False):
+                    range=(-1, 5), vmin=None, vmax=None, weight='none', t0=0, postprocessing=False,
+                    scalebar_size=None, scalebar_label=None):
         """
         plot SFR map overlaid on top of gas density+temp map
         
@@ -700,11 +726,15 @@ class snapshot:
         """
         BoxSize = self.BoxSize
         center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
         cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
         t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
-        
+
         # cooling time
         channels = get_channel_coolingtime(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                    imsize=imsize, orientation=orientation, postprocessing=postprocessing,  weight=weight,)
@@ -732,17 +762,17 @@ class snapshot:
             axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
 
             scalebar = AnchoredSizeBar(axes[0].transData,
-                           200, '200 pc', 'lower center', 
+                           scalebar_size, scalebar_label, 'lower center',
                            pad=0.2,
                            color='white',
                            frameon=False,
-                           size_vertical=1.5,
+                           size_vertical=scalebar_size / 100,
                            fontproperties=fontprop,
                            sep=3)
             axes[0].add_artist(scalebar)
             axes[0].set_xticks([])
-            axes[0].set_yticks([])            
-            
+            axes[0].set_yticks([])
+
             axes[1].imshow(cmap_cooltime, extent=[range[0], range[1], range[0], range[1]], aspect=0.055)
             axes[1].set_xlabel(r'$\log{t_\text{cool}}$', labelpad=2, fontsize=13)
             axes[1].set_yticklabels([])
@@ -761,8 +791,8 @@ class snapshot:
 
 
 def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom', show_BH=False,
-                    show=True, vmin=None, vmax=None, center=None, savefig_file=None, t0=15, range_jet=(1e-4,2e-4), levels=1, 
-                        contour_color='lightpink'):
+                    show=True, vmin=None, vmax=None, center=None, savefig_file=None, t0=15, range_jet=(1e-4,2e-4), levels=1,
+                        contour_color='lightpink', scalebar_size=None, scalebar_label=None):
     assert abs(snapshot_jet.time - snapshot_turb.time) < 0.03
     if snapshot_turb.BoxSize == snapshot_jet.BoxSize:
         BoxSize = snapshot_turb.BoxSize
@@ -775,6 +805,10 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
         else:
             raise('center is not the same for the snapshots, specify it as an argument')
 
+    if scalebar_size is None:
+        scalebar_size = _nice_scalebar_size(lbox)
+    if scalebar_label is None:
+        scalebar_label = f'{scalebar_size:g}'
 
     cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
     cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
@@ -819,11 +853,11 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
 
             
         scalebar = AnchoredSizeBar(axes[0].transData,
-                       200, '200 pc', 'lower center', 
+                       scalebar_size, scalebar_label, 'lower center',
                        pad=0.2,
                        color='white',
                        frameon=False,
-                       size_vertical=1.5,
+                       size_vertical=scalebar_size / 100,
                        fontproperties=fontprop,
                        sep=3)
         axes[0].add_artist(scalebar)
@@ -858,11 +892,11 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
             axes[0].add_patch(outer)
                     
         scalebar = AnchoredSizeBar(axes[0].transData,
-                       200, '200 pc', 'lower center', 
+                       scalebar_size, scalebar_label, 'lower center',
                        pad=0.2,
                        color='white',
                        frameon=False,
-                       size_vertical=1.5,
+                       size_vertical=scalebar_size / 100,
                        fontproperties=fontprop,
                        sep=3)
         axes[0].add_artist(scalebar)
@@ -893,11 +927,11 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
         ax.contour(channels_jet[1], extent=[0, lbox, 0, lbox],levels=levels, colors=contour_color, linewidths=1.5)
         
         scalebar = AnchoredSizeBar(ax.transData,
-                       200, '200 pc', 'lower center', 
+                       scalebar_size, scalebar_label, 'lower center',
                        pad=0.2,
                        color='white',
                        frameon=False,
-                       size_vertical=1.5,
+                       size_vertical=scalebar_size / 100,
                        fontproperties=fontprop,
                        sep=3)
         ax.add_artist(scalebar)
@@ -907,7 +941,7 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
             plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
-        else: 
+        else:
             plt.close()
     else: raise ValueError('showbar can be bottom, right, blank or none')
     return f
