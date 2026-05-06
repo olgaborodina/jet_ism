@@ -177,10 +177,45 @@ def get_channel_soundspeed(file,center, lbox, slab_width=None, sscolumn=-1,
     psml[psml < 1] = 1
     
     #---------------------------------------
-    gasdev = pos2device(gaspos,lbox, slab_width, imsize, orientation) 
+    gasdev = pos2device(gaspos,lbox, slab_width, imsize, orientation)
     channels = painter.paint(gasdev, psml, [gassoundspeed], (imsize, imsize), np=8)
     return channels
 
+
+def get_channel_pressure(file, center, lbox, slab_width=None,
+                         imsize=2000, smlfac=1.0, orientation='xy'):
+    """
+    Get channels of the gas density and mass weighted thermal pressure (cgs, dyn/cm^2)
+    Input: file (filename, including directory)
+           center (3-vector, center of the box)
+           lbox (float, box length)
+           slab_width (float, projection depth, default is lbox)
+           imsize (int, image size, default is 2000)
+           smlfac (float, smoothing length factor, default is 1.0)
+           orientation (string, projection of 'xy','yz','xz', default is 'xy')
+    Output: channels (2, imsize, imsize), channels[0]: column mass, channels[1]: mass weighted thermal pressure
+    """
+    if slab_width is None:
+        slab_width = lbox
+
+    part = h5py.File(file, 'r')
+    mask, gaspos = cut(part['PartType0'], center, lbox, slab_width, orientation)
+
+    gasm = part['PartType0/Masses'][:][mask]
+    gasvol = gasm / part['PartType0/Density'][:][mask]
+    gassl = smlfac * (gasvol ** (1 / 3))
+
+    gaspressure = calculate_thermal_pressure(part)[mask]
+
+    p_resolution = lbox / imsize
+    psml = gassl / p_resolution
+    psml[psml < 1] = 1
+
+    gasdev = pos2device(gaspos, lbox, slab_width, imsize, orientation)
+    channels = painter.paint(gasdev, psml, [gasm, gasm * gaspressure], (imsize, imsize), np=8)
+    channels[1] /= channels[0]
+
+    return channels
 
 
 def get_channel_sigma_velocity(file,center,lbox,slab_width=None, imsize=2000,smlfac=1.0,orientation='xy',weight='density_square'):

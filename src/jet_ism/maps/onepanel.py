@@ -49,7 +49,7 @@ class snapshot:
 
     def overlap_jet(self, lbox, slab_width=None, imsize=2000, orientation='xy',
                     show=True, range=(-5,0), vmin=None, vmax=None, center=None,
-                    t0=0, scalebar_size=None, scalebar_label=None):
+                    t0=0, scalebar_size=None, scalebar_label=None, savefig_file=None):
         """
         plot jet map overlaid on top of gas density + temp map
 
@@ -103,6 +103,8 @@ class snapshot:
         ax.set_title(self._time_title(t0), fontsize=18)
         add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else:
@@ -111,7 +113,7 @@ class snapshot:
 
     def overlap_shock(self, lbox, slab_width=None, imsize=2000, orientation='xy',
                         show=True, range=(-3.5, -1.8), vmin=None, vmax=None, center=None,
-                        t0=0, scalebar_size=None, scalebar_label=None):
+                        t0=0, scalebar_size=None, scalebar_label=None, savefig_file=None):
         """
         plot shock map overlaid on top of gas density+temp map
         
@@ -167,6 +169,8 @@ class snapshot:
         ax.set_title(self._time_title(t0), fontsize=18)
         add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else:
@@ -289,6 +293,96 @@ class snapshot:
         return f
 
 
+    def overlap_pressure(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
+                         showbar='bottom', pmin=-15, pmax=-9, vmin=-2, vmax=2, center=None,
+                         savefig_file=None, t0=0, scalebar_size=None, scalebar_label=None):
+        """
+        plot mass-weighted thermal pressure map (log scale, cgs dyn/cm^2)
+
+        Parameters
+        ----------
+        lbox: box length
+        slab_width: projection depth
+        orientation: projection of 'xy','yz','xz'
+        imsize: Npixel of the image
+        show: whether to show the plot, boolean, default True
+        showbar: colorbar placement, one of 'bottom', 'right', 'none', 'blank'
+        pmin, pmax: color range for the pressure map in log10 dyn/cm^2, default (-15, -9)
+        vmin, vmax: color range for the density map in log scale, default (-2, 2)
+        center: center of the box, default None (box center)
+        savefig_file: filename to save the figure, default None (not saving)
+        t0: time offset for the title in Myr, default 0
+        """
+        _check_showbar(showbar)
+        BoxSize = self.BoxSize
+        if center == None:
+            center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
+
+        cn0 = np.ones((imsize, imsize)) * 1e-6  # dens placeholder
+        cn1 = np.ones((imsize, imsize)) * 1e4   # temp placeholder
+        t_low, t_up = 2.0, 7.0
+        p_low, p_up = 10 ** pmin, 10 ** pmax  # dyn/cm^2
+
+        # mass-weighted pressure
+        channels = get_channel_pressure(self.fn, center=center, lbox=lbox, slab_width=slab_width,
+                                        imsize=imsize, orientation=orientation)
+        img2 = shockmap(color.NL(channels[1], range=(p_low, p_up)), color.NL(cn0, range=(-7, -6)))
+
+        # cmap for colorbar
+        pressure_array = 10 ** np.linspace(pmin, pmax, 100)
+        density_array = 10 ** np.linspace(vmin, vmax, 100)
+        Density_cmap, P_cmap = np.meshgrid(density_array, pressure_array, indexing='ij')
+        cbar_p = shockmap(color.NL(P_cmap, range=(p_low, p_up)),
+                          color.NL(np.ones_like(Density_cmap) * 1e-6, range=(-7, -6)))
+
+        if showbar == 'bottom':
+            f, axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
+            f.subplots_adjust(hspace=0.3)
+            axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
+
+            axes[1].imshow(cbar_p, extent=[pmin, pmax, pmin, pmax], aspect=0.055)
+            axes[1].set_xlabel(r'log $P$ [dyn cm$^{-2}$]', labelpad=2)
+            axes[1].set_yticks([])
+        elif showbar == 'right':
+            f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
+            axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
+
+            axes[1].imshow(np.transpose(cbar_p, axes=(1, 0, 2)),
+                           extent=[pmin, pmax, pmax, pmin], aspect='auto')
+            axes[1].set_ylabel(r'log $P$ [dyn cm$^{-2}$]', labelpad=4)
+            axes[1].set_xticks([])
+            axes[1].yaxis.tick_right()
+            axes[1].yaxis.set_label_position('right')
+        elif showbar == 'none':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+            ax.set_xticks([]); ax.set_yticks([])
+        elif showbar == 'blank':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_xticks([]); ax.set_yticks([])
+
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+        if show == True:
+            plt.show()
+        else:
+            plt.close()
+        return f
+
+
     def overlap_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom',
                     show=True, savefig_file=None, t0=0, tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None,
                     scalebar_size=None, scalebar_label=None):
@@ -384,7 +478,8 @@ class snapshot:
         return f
 
     def overlap_sigma_velocity(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
-                                center=None, t0=0, scalebar_size=None, scalebar_label=None):
+                                center=None, t0=0, scalebar_size=None, scalebar_label=None,
+                                savefig_file=None):
         """
         TODO: NOT TESTED
         plot velocity-dispersion map overlaid on top of gas density+temp map
@@ -433,6 +528,8 @@ class snapshot:
         ax.set_title(self._time_title(t0), fontsize=18)
         add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else:
@@ -442,7 +539,7 @@ class snapshot:
     
     def overlap_sfr(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
                     range=(-5, 0), vmin=None, vmax=None, weight='sfr', center=None,
-                    t0=0, scalebar_size=None, scalebar_label=None):
+                    t0=0, scalebar_size=None, scalebar_label=None, savefig_file=None):
         """
         plot SFR map overlaid on top of gas density+temp map
         
@@ -496,6 +593,8 @@ class snapshot:
         ax.set_title(self._time_title(t0), fontsize=18)
         add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else: 
@@ -505,7 +604,7 @@ class snapshot:
 
     def overlap_random(self, mask_random, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
                         range=(-5,0), vmin=-2, vmax=2, center=None,
-                        t0=0, scalebar_size=None, scalebar_label=None):
+                        t0=0, scalebar_size=None, scalebar_label=None, savefig_file=None):
         """
         plot map of a random mask overlaid on top of gas density+temp map
         
@@ -559,6 +658,8 @@ class snapshot:
         ax.set_title(self._time_title(t0), fontsize=18)
         add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else: 
