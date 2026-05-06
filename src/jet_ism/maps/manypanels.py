@@ -1,5 +1,6 @@
-from .. import (unit_velocity, unit_length, unit_mass, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity, _make_gif)
+from .. import (unit_velocity, unit_length, unit_mass, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_time_title, rho_to_numdensity, _make_gif, megayear)
 from .base import *
+from .base import _nice_scalebar_size, _check_showbar, SHOWBAR_OPTIONS
 from ..gas.general import *
 from .get_channel import *
 
@@ -28,24 +29,35 @@ class snapshot2:
         self.UnitEnergy = self.UnitMass * (self.UnitLength**2) / (self.UnitTime**2)
         # self.temp_to_u = (BOLTZMANN/PROTONMASS)/mu/(GAMMA-1)/self.UnitVelocity/self.UnitVelocity
         self.rho_to_numdensity = 1.*self.UnitDensity/(mu*PROTONMASS)
-        self.time = part['Header'].attrs['Time'] * unit_time_in_megayr
-        
+        self.redshift = float(part['Header'].attrs['Redshift'])
+        if abs(self.redshift) < 1e-6:
+            self.time = float(part['Header'].attrs['Time']) * self.UnitTime / megayear
+        else:
+            self.time = 0.0
+
         BoxSize = part['Header'].attrs['BoxSize']
         self.BoxSize = BoxSize
         self.center = np.array([0.5 * BoxSize, 0.5 * BoxSize, 0.5 * BoxSize])
 
+    def _time_title(self, t0=0):
+        if abs(self.redshift) < 1e-6:
+            return r'$t=$%.2f Myr' % (self.time - t0)
+        else:
+            return r'$z=$%.4f' % self.redshift
 
-    def overlap2_jet_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, center=None, cmap_jet='cubehelix', showbar=True, title='', vmin=-2, vmax=2, jmin=-5, jmax=-0, tmin=2.5, tmax=7, savefig_file=None, t0=0):
+
+    def overlap2_jet_temp(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, center=None, cmap_jet='cubehelix', showbar='bottom', title='', vmin=-2, vmax=2, jmin=-5, jmax=-0, tmin=2.5, tmax=7, savefig_file=None, t0=0,
+                            scalebar_size=None, scalebar_label=None):
         """
         plot jet map together with gas density+temp map
-        
+
         Parameters
         ----------
         lbox: box length
         slab_width: projection depth
         imsize: Npixel of the image
         orientation: projection of 'xy','yz','xz'
-        showbar: whether to show the colorbar, under, side, none, or blankor none
+        showbar: colorbar placement, one of 'bottom', 'right', 'none', 'blank'
         show: whether to show the plot, boolean, default True
         savefig_file: filename to save the figure, default None (not saving)
         t0: time offset for the title in Myr, default 0
@@ -54,10 +66,14 @@ class snapshot2:
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
         center: center of the box, default None (box center)
         """
-        
+        _check_showbar(showbar)
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
         t_low, t_up = tmin, tmax
         
         cn0 = np.ones((imsize,imsize))*1e-6 # dens placeholder
@@ -111,31 +127,19 @@ class snapshot2:
         fields = [img_jet, img_2field]
         labels = [r'Density + Jet Tracer', r'Density + Temperature']
 
-        fontprop = fm.FontProperties(size=12)
-        if showbar == 'under':
+        if showbar == 'bottom':
             f,axes = plt.subplots(3,2, width_ratios=[0.5, 0.5], height_ratios=[0.92, 0.05, 0.05], figsize=(11,7))
             f.subplots_adjust(hspace=0.5,wspace=0.3)
             for i in range(0,len(fields)):
                 ax = axes[0][i]
                 ax.imshow(fields[i],extent=[0,lbox,0,lbox],origin='lower')
                 ax.text(0.05,0.9,labels[i],color='white',fontsize=15,weight="bold", transform=ax.transAxes)
-                # ax.set_xlabel('pc', fontsize=15)
                 if i==0:
                     ax.set_title(title, fontsize=15)
                 if i==1:
-                    ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=15)
-                
-                scalebar = AnchoredSizeBar(ax.transData,
-                           200, '200 pc', 'lower center', 
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=1.5,
-                           fontproperties=fontprop,
-                           sep=3)
-                ax.add_artist(scalebar)
-                ax.set_xticks([])
-                ax.set_yticks([])
+                    ax.set_title(self._time_title(t0), fontsize=15)
+                add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+                ax.set_xticks([]); ax.set_yticks([])
             axes[1][0].imshow(cmap_jet, extent=[jmin, jmax, jmin, jmax], aspect=0.055)
             axes[1][0].set_xlabel(r'$\log{X_\text{jet}}$', labelpad=2, fontsize=13)
             axes[1][0].set_yticklabels([])
@@ -144,19 +148,17 @@ class snapshot2:
             axes[2][0].set_yticklabels([])
             axes[2][0].set_yticks([])
             axes[2][0].set_xlabel(r'log $\rho$ [$M_\odot$ pc$^{-2}$]', labelpad=2, fontsize=13)
-    
+
             gs = axes[1, 1].get_gridspec()
-            # remove the underlying axes
             for ax in axes[1:, -1]:
                 ax.remove()
             axbig = f.add_subplot(gs[1:, -1])
             axbig.imshow(cmap_density_temperature, extent=[t_low, t_up, vmax, vmin], aspect=0.4)
             axbig.set_xlim(t_low, t_up)
-            # axbig.set_xticks(ticks=np.arange(np.round(t_low), np.round(t_up)), labels=np.arange(np.round(t_low), np.round(t_up)))
             axbig.set_xlabel(r'$\log T$ [K]', labelpad=2, fontsize=13)
             axbig.set_ylabel(r'log $\rho$ ' + '\n' + r' [$M_\odot$ pc$^{-2}$]', labelpad=2, fontsize=13)
 
-        elif showbar == 'side':
+        elif showbar == 'right':
             f,axes = plt.subplots(1,5, width_ratios=[0.07, 0.07, 0.3, 0.3, 0.11], figsize=(16,5))
             f.subplots_adjust(hspace=0.5,wspace=0.01)
             for i in range(0,len(fields)):
@@ -166,19 +168,9 @@ class snapshot2:
                 if i==0:
                     ax.set_title(title, fontsize=15)
                 if i==1:
-                    ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=15)
-                
-                scalebar = AnchoredSizeBar(ax.transData,
-                           200, '200 pc', 'lower center', 
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=1.5,
-                           fontproperties=fontprop,
-                           sep=3)
-                ax.add_artist(scalebar)
-                ax.set_xticks([])
-                ax.set_yticks([])
+                    ax.set_title(self._time_title(t0), fontsize=15)
+                add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+                ax.set_xticks([]); ax.set_yticks([])
             axes[0].imshow(np.transpose(cmap_jet, axes=(1,0,2)), extent=[jmax, jmin, jmax, jmin], aspect=18)
             axes[0].set_ylabel('log (jet tracer)', labelpad=2)
             axes[0].set_xticklabels([])
@@ -187,57 +179,42 @@ class snapshot2:
             axes[1].set_xticklabels([])
             axes[1].set_xticks([])
             axes[1].set_ylabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
-            # axes[1][0].set_xlabel(labels[i].split("+")[1])
-            # axes[1][1].set_ylabel(labels[i].split("+")[0])
-    
-            # gs = axes[1, 1].get_gridspec()
-            # # # remove the underlying axes
-            # for ax in axes[2:4]:
-            #     ax.remove()
-            # axbig = f.add_subplot(gs[1:, -1])
+
             axes[4].imshow(np.transpose(cmap_density_temperature, axes=(1,0,2)), extent=[vmin, vmax, t_up, t_low], aspect=4.3)
             axes[4].set_ylabel('log (temperature [K])', labelpad=4)
             axes[4].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
             axes[4].yaxis.tick_right()
             axes[4].yaxis.set_label_position('right')
-            
+
         elif showbar == 'none':
             f,axes = plt.subplots(1,2, width_ratios=[0.5, 0.5], figsize=(11,7*0.92))
             f.subplots_adjust(wspace=0.3)
-            fontprop = fm.FontProperties(size=12)
             for i in range(0,len(fields)):
                 ax = axes[i]
                 ax.imshow(fields[i],extent=[0,lbox,0,lbox],origin='lower')
                 ax.text(0.05,0.9,labels[i],color='white',fontsize=15,weight="bold", transform=ax.transAxes)
-                # ax.set_xlabel('pc', fontsize=15)
                 if i==0:
                     ax.set_title(title, fontsize=15)
                 if i==1:
-                    ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=15)
+                    ax.set_title(self._time_title(t0), fontsize=15)
+                add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+                ax.set_xticks([]); ax.set_yticks([])
 
-                scalebar = AnchoredSizeBar(ax.transData,
-                           200, '200 pc', 'lower center', 
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=1.5,
-                           fontproperties=fontprop,
-                           sep=3)
-                ax.add_artist(scalebar) 
-                ax.set_xticks([])
-                ax.set_yticks([])
-        else:
-            raise ValueError('showbar can be only under,sode or none')
-        
-        try:
-            plt.savefig(savefig_file)
-        except: print("Can't save file")
+        elif showbar == 'blank':
+            f,axes = plt.subplots(1,2, width_ratios=[0.5, 0.5], figsize=(11,7*0.92))
+            f.subplots_adjust(wspace=0.3)
+            for i in range(0,len(fields)):
+                ax = axes[i]
+                ax.imshow(fields[i],extent=[0,lbox,0,lbox],origin='lower')
+                ax.set_xticks([]); ax.set_yticks([])
+
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
-            return f
-        else: 
-            return f
+        else:
             plt.close()
+        return f
  
 
 

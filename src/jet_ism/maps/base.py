@@ -17,6 +17,7 @@ import matplotlib as mpl
 from matplotlib.colors import ListedColormap,colorConverter
 from matplotlib.collections import LineCollection
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import matplotlib.font_manager as fm
 
 from gaepsi2 import painter
 from gaepsi2 import color
@@ -164,7 +165,43 @@ def pos2device(ppos, lbox, slab_width, imsize, orientation):
         
     pos2d = camera.apply(camera.matrix(mpers, mmv), ppos) # apply a camera matrix to data coordinates, return position in clip coordinate
     posdev = camera.todevice(pos2d, extent=(imsize, imsize)) # Convert clipping coordinate to device coordinate
-    
+
     return posdev
 
 
+SHOWBAR_OPTIONS = ('bottom', 'right', 'none', 'blank')
+
+
+def _check_showbar(showbar):
+    """showbar must be one of: 'bottom', 'right', 'none', 'blank'."""
+    if showbar not in SHOWBAR_OPTIONS:
+        raise ValueError(
+            f"showbar must be one of {SHOWBAR_OPTIONS}, got {showbar!r}"
+        )
+    return showbar
+
+
+def _nice_scalebar_size(lbox):
+    """Return a nice round number ~10% of lbox for use as scalebar size."""
+    target = lbox / 10
+    exp = np.floor(np.log10(target))
+    frac = target / 10 ** exp
+    for nice in [1, 2, 5, 10]:
+        if frac <= nice:
+            return nice * 10 ** exp
+    return 10 * 10 ** exp
+
+
+def add_scalebar(ax, lbox, size=None, label=None, color='white', loc='lower center'):
+    """
+    Add an AnchoredSizeBar to ax. Auto-picks a nice size ~10% of lbox if size is None.
+    label defaults to the numeric value of size (no unit suffix).
+    """
+    size = size if size is not None else _nice_scalebar_size(lbox)
+    label = label if label is not None else f'{size:g}'
+    bar = AnchoredSizeBar(ax.transData, size, label, loc,
+                          pad=0.2, color=color, frameon=False,
+                          size_vertical=size / 100,
+                          fontproperties=fm.FontProperties(size=12), sep=3)
+    ax.add_artist(bar)
+    return bar

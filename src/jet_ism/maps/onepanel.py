@@ -1,21 +1,12 @@
-from .. import (unit_velocity, unit_length, unit_mass, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity, megayear)
+from .. import (unit_velocity, unit_length, unit_mass, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_time_title, rho_to_numdensity, megayear)
 from .base import *
+from .base import _nice_scalebar_size, _check_showbar, SHOWBAR_OPTIONS
 from ..gas.general import *
 from .get_channel import *
 
 import matplotlib.font_manager as fm
 from matplotlib.patches import Circle
 
-
-def _nice_scalebar_size(lbox):
-    """Return a nice round number ~10% of lbox for use as scalebar size."""
-    target = lbox / 10
-    exp = np.floor(np.log10(target))
-    frac = target / 10 ** exp
-    for nice in [1, 2, 5, 10]:
-        if frac <= nice:
-            return nice * 10 ** exp
-    return 10 * 10 ** exp
 
 class snapshot:
     """
@@ -40,17 +31,28 @@ class snapshot:
         self.UnitEnergy = self.UnitMass * (self.UnitLength**2) / (self.UnitTime**2)
         # self.temp_to_u = (BOLTZMANN/PROTONMASS)/mu/(GAMMA-1)/self.UnitVelocity/self.UnitVelocity
         self.rho_to_numdensity = 1.*self.UnitDensity/(mu*PROTONMASS)
-        self.time = part['Header'].attrs['Time'] * unit_time_in_megayr
-        
+        self.redshift = float(part['Header'].attrs['Redshift'])
+        if abs(self.redshift) < 1e-6:
+            self.time = float(part['Header'].attrs['Time']) * self.UnitTime / megayear
+        else:
+            self.time = 0.0
+
         BoxSize = part['Header'].attrs['BoxSize']
         self.BoxSize = BoxSize
         self.center = np.array([0.5 * BoxSize, 0.5 * BoxSize, 0.5 * BoxSize])
-                
-    def overlap_jet(self, lbox, slab_width=None, imsize=2000, orientation='xy', 
-                    show=True, range=(-5,0), vmin=None, vmax=None, center=None):
+
+    def _time_title(self, t0=0):
+        if abs(self.redshift) < 1e-6:
+            return r'$t=$%.2f Myr' % (self.time - t0)
+        else:
+            return r'$z=$%.4f' % self.redshift
+
+    def overlap_jet(self, lbox, slab_width=None, imsize=2000, orientation='xy',
+                    show=True, range=(-5,0), vmin=None, vmax=None, center=None,
+                    t0=0, scalebar_size=None, scalebar_label=None):
         """
         plot jet map overlaid on top of gas density + temp map
-        
+
         Parameters
         ----------
         lbox: box length
@@ -61,10 +63,15 @@ class snapshot:
         range: color range for the jet map in log scale, default (-5,0)
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
         center: center of the box, default None (box center)
+        t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
         cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
@@ -93,16 +100,18 @@ class snapshot:
         
         ax.imshow(img, extent=[0, lbox, 0, lbox],origin='lower')
         ax.set_xlabel('pc', fontsize=15)
-        ax.set_title('t=%.2f Myr'%(self.time), fontsize=18)
+        ax.set_title(self._time_title(t0), fontsize=18)
+        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
         if show == True:
             plt.show()
-        else: 
+        else:
             plt.close()
         return f
 
-    def overlap_shock(self, lbox, slab_width=None, imsize=2000, orientation='xy', 
-                        show=True, range=(-3.5, -1.8), vmin=None, vmax=None, center=None):
+    def overlap_shock(self, lbox, slab_width=None, imsize=2000, orientation='xy',
+                        show=True, range=(-3.5, -1.8), vmin=None, vmax=None, center=None,
+                        t0=0, scalebar_size=None, scalebar_label=None):
         """
         plot shock map overlaid on top of gas density+temp map
         
@@ -116,15 +125,20 @@ class snapshot:
         range: color range for the shock map in log scale, default (-3.5, -1.8)
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
         center: center of the box, default None (box center)
+        t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize, imsize))*1e-6 # dens placeholder
         cn1 = np.ones((imsize, imsize))*1e4 # temp placeholder
         t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
-        
+
         # gas rho temp
         channels = get_channel_gas_rhotemp(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                    imsize=imsize, orientation=orientation)
@@ -134,9 +148,9 @@ class snapshot:
             vmin = vmin0
         if vmax == None:
             vmax = vmax0
-    
+
         img1 = color.CoolWarm(color.NL(cn1, range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
-        
+
         # shock
         channels = get_channel_shock(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                           imsize=imsize, shockcolumn=-1, orientation=orientation)
@@ -147,24 +161,25 @@ class snapshot:
         f, ax = plt.subplots(1, 1, figsize=(5, 5))
         scale = color.NL(channels[0], range=range)
         img = overlay(img1, img2, 2 * np.nan_to_num(scale))
-        
+
         ax.imshow(img,extent=[0, lbox, 0, lbox], origin='lower')
         ax.set_xlabel('pc', fontsize=15)
-        ax.set_title('t=%.2f Myr'%(self.time), fontsize=18)
-        
+        ax.set_title(self._time_title(t0), fontsize=18)
+        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+
         if show == True:
             plt.show()
-        else: 
+        else:
             plt.close()
         return f
 
 
     def overlap_soundspeed(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
-                            showbar=False, range=(4, 5.2), vmin=-2, vmax=2, center=None, savefig_file=None, t0=0,
+                            showbar='bottom', range=(4, 5.2), vmin=-2, vmax=2, center=None, savefig_file=None, t0=0,
                             scalebar_size=None, scalebar_label=None):
         """
-        plot shock map overlaid on top of gas density+temp map
-        
+        plot sound speed map overlaid on top of gas density+temp map
+
         Parameters
         ----------
         lbox: box length
@@ -172,13 +187,14 @@ class snapshot:
         orientation: projection of 'xy','yz','xz'
         imsize: Npixel of the image
         show: whether to show the plot, boolean, default True
-        showbar: whether to show the colorbar, boolean, default False
+        showbar: colorbar placement, one of 'bottom', 'right', 'none', 'blank'
         range: color range for the sound speed map in log scale, default (4, 5.2)
-        vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
+        vmin, vmax: color range for the density map in log scale, default (-2, 2)
         center: center of the box, default None (box center)
         savefig_file: filename to save the figure, default None (not saving)
         t0: time offset for the title in Myr, default 0
         """
+        _check_showbar(showbar)
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
@@ -227,55 +243,45 @@ class snapshot:
         cmap_density = color.CoolWarm(color.NL(np.ones_like(Temperature_cmap) * 10 ** np.mean([t_low, t_up]),range=(t_low, t_up)),color.NL(Density_cmap.T, range=(vmin,vmax)))
         cbar_ss = shockmap(color.N(ss_cmap, range=(ss_low, ss_up)), color.NL(np.ones_like(Density_cmap) * 1e-6, range=(-7, -6)))
     
-        if showbar==True:
-            f,axes = plt.subplots(2,1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
+        if showbar=='bottom':
+            f, axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
             f.subplots_adjust(hspace=0.3)
-            axes[0].imshow(img2,extent=[0, lbox, 0, lbox],origin='lower')
-            axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
+            axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
-            scalebar = AnchoredSizeBar(axes[0].transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            axes[0].add_artist(scalebar)
-            axes[0].set_xticks([])
-            axes[0].set_yticks([])
-
-            axes[1].imshow(cbar_ss, extent=[ss_low, ss_up,ss_low, ss_up,], aspect=0.055)
+            axes[1].imshow(cbar_ss, extent=[ss_low, ss_up, ss_low, ss_up], aspect=0.055)
             axes[1].set_xlabel(r'sound speed cm/s', labelpad=2)
             axes[1].set_yticks([])
             axes[1].ticklabel_format(axis='x', style='sci', scilimits=(0, 0))
+        elif showbar=='right':
+            f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
+            axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")
-            if show == True:
-                plt.show()
-            else: 
-                plt.close()
-        else:
-            f,ax = plt.subplots(1, 1, figsize=(5, 5))            
+            axes[1].imshow(np.transpose(cbar_ss, axes=(1, 0, 2)),
+                           extent=[ss_low, ss_up, ss_up, ss_low], aspect='auto')
+            axes[1].set_ylabel(r'sound speed cm/s', labelpad=4)
+            axes[1].set_xticks([])
+            axes[1].yaxis.tick_right()
+            axes[1].yaxis.set_label_position('right')
+            axes[1].ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
+        elif showbar=='none':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
             ax.imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
-            ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
-            
-            scalebar = AnchoredSizeBar(ax.transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            ax.add_artist(scalebar)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")
+            ax.set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+            ax.set_xticks([]); ax.set_yticks([])
+        elif showbar=='blank':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_xticks([]); ax.set_yticks([])
+
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else:
@@ -303,6 +309,7 @@ class snapshot:
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
         center: center of the box, default None (box center)
         """
+        _check_showbar(showbar)
         BoxSize = self.BoxSize
         if center==None:
             center = self.center
@@ -334,130 +341,83 @@ class snapshot:
         cmap_density_temperature = color.CoolWarm(color.NL(Temperature_cmap,range=(t_low, t_up)), color.NL(Density_cmap, range=(vmin, vmax)))
 
         #---------
-        fontprop = fm.FontProperties(size=12)
         if showbar=='bottom':
             f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
             f.subplots_adjust(hspace=0.3)
             axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
-            axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
-
-            scalebar = AnchoredSizeBar(axes[0].transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            axes[0].add_artist(scalebar)
-            axes[0].set_xticks([])
-            axes[0].set_yticks([])
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
             axes[1].imshow(cmap_density_temperature, extent=[t_low, t_up, vmax, vmin], aspect=0.32)
             axes[1].set_xlabel(r'log $T$ [K]', labelpad=2)
             axes[1].set_ylabel(r'$\log{\rho}$ ' + '\n' + r' [$M_\odot$ pc$^{-2}$])', labelpad=2)
-
-
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")
-            if show == True:
-                plt.show()
-            else: 
-                plt.close()
         elif showbar=='right':
             f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
             axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
-            axes[0].set_title('t=%.2f Myr'%(self.time -t0), fontsize=18)
-
-            scalebar = AnchoredSizeBar(axes[0].transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            axes[0].add_artist(scalebar)
-            axes[0].set_xticks([])
-            axes[0].set_yticks([])
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
             axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)), extent=[vmin, vmax, t_up, t_low], aspect=4.1)
             axes[1].set_ylabel('log (temperature [K])', labelpad=4)
             axes[1].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
             axes[1].yaxis.tick_right()
             axes[1].yaxis.set_label_position('right')
-        
-            if savefig_file != None:
-                plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
-            if show == True:
-                plt.show()
-            else: 
-                plt.close()
         elif showbar=='none':
-            f,ax = plt.subplots(1, 1, figsize=(5,5))            
+            f,ax = plt.subplots(1, 1, figsize=(5,5))
             ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-            ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
-
-            scalebar = AnchoredSizeBar(ax.transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            ax.add_artist(scalebar)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            if savefig_file != None:
-                plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
-            if show == True:
-                plt.show()
-            else:
-                plt.close()
+            ax.set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+            ax.set_xticks([]); ax.set_yticks([])
         elif showbar=='blank':
-            f,ax = plt.subplots(1, 1, figsize=(5,5))            
+            f,ax = plt.subplots(1, 1, figsize=(5,5))
             ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-            ax.set_xticks([])
-            ax.set_yticks([])
-            if savefig_file != None:
-                plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
-            if show == True:
-                plt.show()
-            else: 
-                plt.close()
-        else: raise ValueError('showbar can be bottom, right, blank or none')
+            ax.set_xticks([]); ax.set_yticks([])
+
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+        if show == True:
+            plt.show()
+        else:
+            plt.close()
         return f
 
-    def overlap_sigma_velocity(self,lbox,slab_width=None,imsize=2000,orientation='xy', show=True):
+    def overlap_sigma_velocity(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
+                                center=None, t0=0, scalebar_size=None, scalebar_label=None):
         """
         TODO: NOT TESTED
-        plot shock map overlaid on top of gas density+temp map
-        
+        plot velocity-dispersion map overlaid on top of gas density+temp map
+
         Parameters
         ----------
         lbox: box length
         slab_width: projection depth
         orientation: projection of 'xy','yz','xz'
         imsize: Npixel of the image
+        center: center of the box, default None (box center)
+        t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
-        center = self.center
+        if center is None:
+            center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize,imsize))*1e-6 # dens placeholder
         cn1 = np.ones((imsize,imsize))*1e4 # temp placeholder
         t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
-        
+
         # gas rho temp
         channels = get_channel_gas_rhotemp(self.fn,center=center,lbox=lbox,slab_width=slab_width,
                                    imsize=imsize,orientation=orientation)
         x = channels[0][channels[0]>0]
         vmin0,vmax0 = np.log10(np.percentile(x,1)),np.log10(np.percentile(x,99))
         img1 = color.CoolWarm(color.NL(channels[1],range=(t_low,t_up)),color.NL(channels[0], range=(vmin0,vmax0)))
-        #img1 = color.CoolWarm(color.NL(channels[0], range=(vmin0,vmax0)))
-        
-        # radial velocity
+
+        # velocity dispersion
         channels = get_channel_sigma_velocity(self.fn,center=center,lbox=lbox,slab_width=slab_width,
                                           imsize=imsize,orientation=orientation)
         img2 = velmap(color.N(channels[1],range=(50, 300)),color.NL(cn0, range=(-7,-6)))
@@ -467,20 +427,22 @@ class snapshot:
         f,ax = plt.subplots(1,1,figsize=(5,5))
         scale = color.N(channels[1],range=(50, 300))
         img = overlay(img1,img2,2*np.nan_to_num(scale))
-        
+
         ax.imshow(img,extent=[0,lbox,0,lbox],origin='lower')
         ax.set_xlabel('pc', fontsize=15)
-        ax.set_title('t=%.2f Myr'%(self.time), fontsize=18)
-        
+        ax.set_title(self._time_title(t0), fontsize=18)
+        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+
         if show == True:
             plt.show()
-        else: 
+        else:
             plt.close()
         return f
 
     
-    def overlap_sfr(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, 
-                    range=(-5, 0), vmin=None, vmax=None, weight='sfr'):
+    def overlap_sfr(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
+                    range=(-5, 0), vmin=None, vmax=None, weight='sfr', center=None,
+                    t0=0, scalebar_size=None, scalebar_label=None):
         """
         plot SFR map overlaid on top of gas density+temp map
         
@@ -494,14 +456,20 @@ class snapshot:
         range: color range for the SFR map in log scale, default (-5,0)
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
         weight: weighting for the SFR map, 'mass' or 'sfr', default 'sfr'
+        t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
-        center = self.center
+        if center is None:
+            center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize,imsize)) * 1e-6 # dens placeholder
         cn1 = np.ones((imsize,imsize)) * 1e4 # temp placeholder
         t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
-        
+
         # gas rho temp
         channels = get_channel_gas_rhotemp(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                    imsize=imsize, orientation=orientation)
@@ -512,20 +480,21 @@ class snapshot:
         if vmax == None:
             vmax = vmax0
         img1 = color.CoolWarm(color.NL(cn1, range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
-        
+
         # SFR
         channels = get_channel_sfr(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                           imsize=imsize, sfrcolumn=-1, orientation=orientation, weight=weight)
         img2 = sfrmap(color.NL(channels[1], range=range), color.NL(cn0, range=(-7, -6)))
-        
+
         #---------
         f,ax = plt.subplots(1, 1, figsize=(5,5))
         scale = color.NL(channels[1], range=range)
         img = overlay(img1, img2, 2 * np.nan_to_num(scale))
-        
+
         ax.imshow(img, extent=[0, lbox, 0, lbox],origin='lower')
         ax.set_xlabel('pc', fontsize=15)
-        ax.set_title('t=%.2f Myr'%(self.time), fontsize=18)
+        ax.set_title(self._time_title(t0), fontsize=18)
+        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
         if show == True:
             plt.show()
@@ -535,7 +504,8 @@ class snapshot:
 
 
     def overlap_random(self, mask_random, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
-                        range=(-5,0), vmin=-2, vmax=2):
+                        range=(-5,0), vmin=-2, vmax=2, center=None,
+                        t0=0, scalebar_size=None, scalebar_label=None):
         """
         plot map of a random mask overlaid on top of gas density+temp map
         
@@ -549,14 +519,20 @@ class snapshot:
         show: whether to show the plot, boolean, default True
         range: color range for the random map in log scale, default (-5,0)
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
+        t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
-        center = self.center
+        if center is None:
+            center = self.center
+        if scalebar_size is None:
+            scalebar_size = _nice_scalebar_size(lbox)
+        if scalebar_label is None:
+            scalebar_label = f'{scalebar_size:g}'
 
         cn0 = np.ones((imsize, imsize))*1e-6 # dens placeholder
         cn1 = np.ones((imsize, imsize))*1e4 # temp placeholder
         t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
-        
+
         # gas rho temp
         channels = get_channel_gas_rhotemp(self.fn, center=center, lbox=lbox, slab_width=slab_width,
                                    imsize=imsize, orientation=orientation)
@@ -567,20 +543,21 @@ class snapshot:
         if vmax == None:
             vmax = vmax0
         img1 = color.CoolWarm(color.NL(cn1, range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
-        
+
         # random field
         channels = get_channel_random(self.fn, mask_random, center=center, lbox=lbox, slab_width=slab_width,
                                           imsize=imsize, orientation=orientation)
         img2 = sfrmap(color.NL(channels[1], range=range), color.NL(cn0, range=(-7, -6)))
-        
+
         #---------
         f,ax = plt.subplots(1, 1, figsize=(5, 5))
         scale = color.NL(channels[1], range=range)
         img = overlay(img1, img2, 2 * np.nan_to_num(scale))
-        
+
         ax.imshow(img,extent=[0, lbox, 0, lbox],origin='lower')
         ax.set_xlabel('pc', fontsize=15)
-        ax.set_title('t=%.2f Myr'%(self.time), fontsize=18)
+        ax.set_title(self._time_title(t0), fontsize=18)
+        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
 
         if show == True:
             plt.show()
@@ -590,27 +567,28 @@ class snapshot:
 
 
 
-    def overlap_temp_stars(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar=False, show=True, savefig_file=None, t0=0,
+    def overlap_temp_stars(self, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom', show=True, savefig_file=None, t0=0,
                             tmin=2.5, tmax=7.0, vmin=-2, vmax=2, center=None, age_cut=False,
                             scalebar_size=None, scalebar_label=None):
         """
-        plot jet map overlaid on top of gas density+temp map
-        
+        plot density+temperature map with star particles overlaid
+
         Parameters
         ----------
         lbox: box length
         slab_width: projection depth
         orientation: projection of 'xy','yz','xz'
         imsize: Npixel of the image
-        showbar: whether to show the colorbar, boolean, default False
+        showbar: colorbar placement, one of 'bottom', 'right', 'none', 'blank'
         show: whether to show the plot, boolean, default True
         savefig_file: filename to save the figure, default None (not saving)
         t0: time offset for the title in Myr, default 0
-        tmin, tmax: color range for the temperature map in log scale, default (
-        vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
+        tmin, tmax: color range for the temperature map in log scale, default (2.5, 7.0)
+        vmin, vmax: color range for the density map in log scale, default (-2, 2)
         center: center of the box, default None (box center)
         age_cut: whether to apply age cut (1 Myr) for the star particles, boolean, default False
         """
+        _check_showbar(showbar)
         BoxSize = self.BoxSize
         if center == None:
             center = self.center
@@ -647,72 +625,63 @@ class snapshot:
 
         #---------
         fontprop = fm.FontProperties(size=12)
-        if showbar==True:
-            f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
-            f.subplots_adjust(hspace=0.3)
-            axes[0].imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-            if len(stars_mass) > 0:
-                axes[0].scatter(stars_coords[0] - coord_shift[0], stars_coords[1] - coord_shift[1], 
-                            c='yellow', s=25 * (stars_mass / stars_mass.max()) ** 2, marker='*')
-            axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
 
-            scalebar = AnchoredSizeBar(axes[0].transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            axes[0].add_artist(scalebar)
-            axes[0].set_xticks([])
-            axes[0].set_yticks([])
+        def _plot_stars(target_ax):
+            target_ax.imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
+            if len(stars_mass) > 0:
+                target_ax.scatter(stars_coords[0] - coord_shift[0], stars_coords[1] - coord_shift[1],
+                                  c='yellow', s=25 * (stars_mass / stars_mass.max()) ** 2, marker='*')
+
+        if showbar=='bottom':
+            f, axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
+            f.subplots_adjust(hspace=0.3)
+            _plot_stars(axes[0])
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
             axes[1].imshow(cmap_density_temperature, extent=[t_low, t_up, vmax, vmin], aspect=0.32)
             axes[1].set_xlabel(r'log $T$ [K]', labelpad=2)
             axes[1].set_ylabel(r'$\log{\rho}$ ' + '\n' + r' [$M_\odot$ pc$^{-2}$])', labelpad=2)
+        elif showbar=='right':
+            f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
+            _plot_stars(axes[0])
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")
-            if show == True:
-                plt.show()
-            else:
-                plt.close()
-        else:
-            f,ax = plt.subplots(1, 1, figsize=(5,5))
-            ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-            if len(stars_mass) > 0:
-                ax.scatter(stars_coords[0]- coord_shift[0], stars_coords[1]- coord_shift[1],
-                            c='yellow', s=25 * (stars_mass / stars_mass.max()) ** 2, marker='*')
-            ax.set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
+            axes[1].imshow(np.transpose(cmap_density_temperature, axes=(1, 0, 2)),
+                           extent=[vmin, vmax, t_up, t_low], aspect=4.1)
+            axes[1].set_ylabel('log (temperature [K])', labelpad=4)
+            axes[1].set_xlabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
+            axes[1].yaxis.tick_right()
+            axes[1].yaxis.set_label_position('right')
+        elif showbar=='none':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            _plot_stars(ax)
+            ax.set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+            ax.set_xticks([]); ax.set_yticks([])
+        elif showbar=='blank':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            _plot_stars(ax)
+            ax.set_xticks([]); ax.set_yticks([])
 
-            scalebar = AnchoredSizeBar(ax.transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            ax.add_artist(scalebar)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
         if show == True:
             plt.show()
         else:
             plt.close()
         return f
 
-    def overlap_coolingtime(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, showbar=True,
+    def overlap_coolingtime(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True, showbar='bottom',
                     range=(-1, 5), vmin=None, vmax=None, weight='none', t0=0, postprocessing=False,
+                    center=None, savefig_file=None,
                     scalebar_size=None, scalebar_label=None):
         """
-        plot SFR map overlaid on top of gas density+temp map
-        
+        plot cooling-time map overlaid on top of gas density+temp map
+
         Parameters
         ----------
         lbox: box length
@@ -720,12 +689,18 @@ class snapshot:
         orientation: projection of 'xy','yz','xz'
         imsize: Npixel of the image
         show: whether to show the plot, boolean, default True
-        range: color range for the SFR map in log scale, default (-5,0)
+        showbar: colorbar placement, one of 'bottom', 'right', 'none', 'blank'
+        range: color range for the cooling time in log scale, default (-1, 5)
         vmin, vmax: color range for the density map in log scale, default None (1 and 99 percentiles)
-        weight: weighting for the SFR map, 'mass' or 'sfr', default 'sfr'
+        weight: weighting for the cooling time map, default 'none'
+        t0: time offset for the title in Myr, default 0
+        center: center of the box, default None (box center)
+        savefig_file: filename to save the figure, default None (not saving)
         """
+        _check_showbar(showbar)
         BoxSize = self.BoxSize
-        center = self.center
+        if center is None:
+            center = self.center
         if scalebar_size is None:
             scalebar_size = _nice_scalebar_size(lbox)
         if scalebar_label is None:
@@ -745,7 +720,7 @@ class snapshot:
         if vmax == None:
             vmax = vmax0
         img1 = color.CoolWarm(color.NL(cn1, range=(t_low, t_up)), color.NL(channels[0], range=(vmin, vmax)))
-        
+
 
         img2 = jetmap(color.NL(channels[1], range=range), color.NL(cn0, range=(-7, -6)))
 
@@ -754,45 +729,55 @@ class snapshot:
         Density_cmap, Cooltime_cmap = np.meshgrid(density_array, cooltime_array, indexing='ij')
         cmap_cooltime = jetmap(color.NL(Cooltime_cmap, range=range),color.NL(np.ones_like(Density_cmap) * 1e-6, range=(-7,-6)))
 
-        fontprop = fm.FontProperties(size=12)
         if showbar=='bottom':
             f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.1], figsize=(5.2, 5 / 0.7))
             f.subplots_adjust(hspace=0.1)
             axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
-            axes[0].set_title(r'$t=$%.2f Myr'%(self.time - t0), fontsize=18)
-
-            scalebar = AnchoredSizeBar(axes[0].transData,
-                           scalebar_size, scalebar_label, 'lower center',
-                           pad=0.2,
-                           color='white',
-                           frameon=False,
-                           size_vertical=scalebar_size / 100,
-                           fontproperties=fontprop,
-                           sep=3)
-            axes[0].add_artist(scalebar)
-            axes[0].set_xticks([])
-            axes[0].set_yticks([])
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
             axes[1].imshow(cmap_cooltime, extent=[range[0], range[1], range[0], range[1]], aspect=0.055)
             axes[1].set_xlabel(r'$\log{t_\text{cool}}$', labelpad=2, fontsize=13)
             axes[1].set_yticklabels([])
             axes[1].set_yticks([])
+        elif showbar=='right':
+            f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
+            axes[0].imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
 
-            try:
-                plt.savefig(savefig_file)
-            except: print("Can't save file")
-                
-            if show == True:
-                plt.show()
-            else: 
-                plt.close()
+            axes[1].imshow(np.transpose(cmap_cooltime, axes=(1, 0, 2)),
+                           extent=[range[0], range[1], range[1], range[0]], aspect='auto')
+            axes[1].set_ylabel(r'$\log{t_\text{cool}}$', labelpad=4, fontsize=13)
+            axes[1].set_xticks([])
+            axes[1].yaxis.tick_right()
+            axes[1].yaxis.set_label_position('right')
+        elif showbar=='none':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+            ax.set_xticks([]); ax.set_yticks([])
+        elif showbar=='blank':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img2, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_xticks([]); ax.set_yticks([])
 
+        if savefig_file is not None:
+            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+        if show == True:
+            plt.show()
+        else:
+            plt.close()
         return f
 
 
 def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsize=2000, orientation='xy', showbar='bottom', show_BH=False,
                     show=True, vmin=None, vmax=None, center=None, savefig_file=None, t0=15, range_jet=(1e-4,2e-4), levels=1,
                         contour_color='lightpink', scalebar_size=None, scalebar_label=None):
+    _check_showbar(showbar)
     assert abs(snapshot_jet.time - snapshot_turb.time) < 0.03
     if snapshot_turb.BoxSize == snapshot_jet.BoxSize:
         BoxSize = snapshot_turb.BoxSize
@@ -837,111 +822,65 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
     cmap_density = color.CoolWarm(color.NL(np.ones_like(Jet_cmap) * 10 ** np.mean(range_jet),range=range_jet),color.NL(Density_cmap.T, range=(vmin,vmax)))
 
     #---------
-    fontprop = fm.FontProperties(size=12)
-
     if showbar=='bottom':
         f,axes = plt.subplots(2, 1, height_ratios=[0.93, 0.1], figsize=(5.2, 5 /0.7))
         axes[0].imshow(img1, extent=[0, lbox, 0, lbox], origin='lower')
-        axes[0].set_title(r'$t=$%.2f Myr'%(snapshot_jet.time - t0), fontsize=18)
+        axes[0].set_title(snapshot_jet._time_title(t0), fontsize=18)
         axes[0].contour(channels_jet[1], extent=[0, lbox, 0, lbox], levels=levels, colors=contour_color, linewidths=1.5)
-        
+
         if show_BH:
             inner = Circle((lbox / 2, lbox / 2), 30, ec='black', fc="none", lw=2, ls= '--')
             outer = Circle((lbox / 2, lbox / 2), 90, ec='black', fc="none", lw=2, ls= '-')
             axes[0].add_patch(inner)
             axes[0].add_patch(outer)
 
-            
-        scalebar = AnchoredSizeBar(axes[0].transData,
-                       scalebar_size, scalebar_label, 'lower center',
-                       pad=0.2,
-                       color='white',
-                       frameon=False,
-                       size_vertical=scalebar_size / 100,
-                       fontproperties=fontprop,
-                       sep=3)
-        axes[0].add_artist(scalebar)
-        axes[0].set_xticks([])
-        axes[0].set_yticks([])            
-        
+        add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+        axes[0].set_xticks([]); axes[0].set_yticks([])
+
         axes[1].imshow(cmap_density, extent=[vmin, vmax, 0, 1], aspect=0.4)
-        axes[1].set_yticks([])      
+        axes[1].set_yticks([])
         axes[1].set_xlabel(r'log $\rho$ [$M_\odot$ pc$^{-2}$]', labelpad=2, fontsize=13)
         plt.tight_layout()
 
-        try:
-            plt.savefig(savefig_file)
-        except: print("Can't save file")
-        if show == True:
-            plt.show()
-        else: 
-            plt.close()
-
-
     elif showbar=='right':
-        f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.05], gridspec_kw={'wspace': 0.02})            
+        f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.05], gridspec_kw={'wspace': 0.02})
         axes[0].imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-        axes[0].set_title(r'$t=$%.2f Myr'%(snapshot_jet.time - t0), fontsize=18)
+        axes[0].set_title(snapshot_jet._time_title(t0), fontsize=18)
         axes[0].contour(channels_jet[1], extent=[0, lbox, 0, lbox],levels=levels, colors=contour_color, linewidths=1.5)
-
 
         if show_BH:
             inner = Circle((lbox / 2, lbox / 2), 30, ec='black', fc="none", lw=2, ls= '--')
             outer = Circle((lbox / 2, lbox / 2), 90, ec='black', fc="none", lw=2, ls= '-')
             axes[0].add_patch(inner)
             axes[0].add_patch(outer)
-                    
-        scalebar = AnchoredSizeBar(axes[0].transData,
-                       scalebar_size, scalebar_label, 'lower center',
-                       pad=0.2,
-                       color='white',
-                       frameon=False,
-                       size_vertical=scalebar_size / 100,
-                       fontproperties=fontprop,
-                       sep=3)
-        axes[0].add_artist(scalebar)
-        axes[0].set_xticks([])
-        axes[0].set_yticks([])
-        
+
+        add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+        axes[0].set_xticks([]); axes[0].set_yticks([])
+
         axes[1].imshow(np.transpose(cmap_density, axes=(1, 0, 2)), extent=[t_up, t_low, vmax, vmin], aspect=10)
-        axes[1].set_xticks([])    
-        
+        axes[1].set_xticks([])
         axes[1].set_ylabel(r'log ($\rho$ [$M_\odot$ pc$^{-2}$])', labelpad=2)
         axes[1].yaxis.tick_right()
         axes[1].yaxis.set_label_position('right')
-        #f.subplots_adjust(right=0.92, bottom=0.14)
-        # f.tight_layout(rect=[0.0, 0.0, 0.92, 1.0])
-        
-        if savefig_file != None:
-            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
-        if show == True:
-            plt.show()
-        else: 
-            plt.close()
-
 
     elif showbar=='none':
-        f,ax = plt.subplots(1, 1, figsize=(5,5))            
+        f,ax = plt.subplots(1, 1, figsize=(5,5))
         ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
-        ax.set_title(r'$t=$%.2f Myr'%(snapshot_jet.time - t0), fontsize=18)
+        ax.set_title(snapshot_jet._time_title(t0), fontsize=18)
         ax.contour(channels_jet[1], extent=[0, lbox, 0, lbox],levels=levels, colors=contour_color, linewidths=1.5)
-        
-        scalebar = AnchoredSizeBar(ax.transData,
-                       scalebar_size, scalebar_label, 'lower center',
-                       pad=0.2,
-                       color='white',
-                       frameon=False,
-                       size_vertical=scalebar_size / 100,
-                       fontproperties=fontprop,
-                       sep=3)
-        ax.add_artist(scalebar)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        if savefig_file != None:
-            plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
-        if show == True:
-            plt.show()
-        else:
-            plt.close()
-    else: raise ValueError('showbar can be bottom, right, blank or none')
+        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+        ax.set_xticks([]); ax.set_yticks([])
+
+    elif showbar=='blank':
+        f,ax = plt.subplots(1, 1, figsize=(5,5))
+        ax.imshow(img1,extent=[0, lbox, 0, lbox], origin='lower')
+        ax.contour(channels_jet[1], extent=[0, lbox, 0, lbox], levels=levels, colors=contour_color, linewidths=1.5)
+        ax.set_xticks([]); ax.set_yticks([])
+
+    if savefig_file is not None:
+        plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
+    if show == True:
+        plt.show()
+    else:
+        plt.close()
     return f

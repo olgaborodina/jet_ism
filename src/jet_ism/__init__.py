@@ -11,7 +11,7 @@ import glob
 
 __all__ = [
     'outflows', 'maps', 'gas', 'stars', 'blackholes', 'propagation', 'styles',
-    'get_time_from_snap', 'get_center', 'get_center_vec', 'get_output_directory',
+    'get_time_from_snap', 'get_time_title', 'get_center', 'get_center_vec', 'get_output_directory',
     'megayear', 'h', 'unit_velocity', 'unit_length', 'unit_mass', 'unit_energy',
     'unit_density', 'unit_time', 'unit_time_in_megayr', 'mu',
     'PROTONMASS', 'BOLTZMANN', 'GRAVITY', 'LIGHTSPEED', 'sigma_T', 'sigma_B', 'rho_to_numdensity', 'GAMMA',
@@ -22,7 +22,7 @@ __all__ = [
 global megayear, h, unit_velocity, unit_length, unit_mass, unit_energy
 global unit_density, unit_time, unit_time_in_megayr, mu
 global PROTONMASS, BOLTZMANN, GRAVITY, LIGHTSPEED, rho_to_numdensity, GAMMA, sigma_T
-global get_time_from_snap
+global get_time_from_snap, get_time_title
 
 # Physical constants and unit conversions
 megayear = 3.15576e13
@@ -62,10 +62,25 @@ def get_time_from_snap(snap_data):
     """
     Find what time the snapshot has in its header.
     Input: snap_data (snapshot)
-    Output: time in sim units
-    
+    Output: time in sim units (non-cosmological) or scale factor (cosmological)
     """
     return float(snap_data["Header"].attrs["Time"])
+
+
+def get_time_title(snap_data, t0=0):
+    """
+    Return a formatted title string for the snapshot epoch.
+    For non-cosmological snapshots (Redshift==0): 't=X.XX Myr'
+    For cosmological snapshots (Redshift!=0): 'z=X.XXXX'
+    """
+    redshift = float(snap_data["Header"].attrs["Redshift"])
+    if abs(redshift) < 1e-6:
+        ulen = float(snap_data["Header"].attrs.get("UnitLength_in_cm", unit_length))
+        uvel = float(snap_data["Header"].attrs.get("UnitVelocity_in_cm_per_s", unit_velocity))
+        t = float(snap_data["Header"].attrs["Time"]) * (ulen / uvel) / megayear - t0
+        return r'$t=$%.2f Myr' % t
+    else:
+        return r'$z=$%.4f' % redshift
 
 
 def get_output_directory(case, density, mach, jetpower, time, storage='holystore01'):
