@@ -8,7 +8,7 @@ import pandas as pd
 import scipy as scp
 import h5py    # hdf5 format
 from pathlib import Path
-from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, rho_to_numdensity)
+from .. import (unit_velocity, unit_time_in_megayr, PROTONMASS, BOLTZMANN, mu, GAMMA, get_time_from_snap, get_time_title, rho_to_numdensity)
 
 from ..gas.general import (get_temp)
 
@@ -60,7 +60,7 @@ def sfr_diagram(output_directory, snapshot_number, xmin=1e-3, xmax=1e8, ymin=-1e
         ax.set_xscale('log')
     if ylog == True:
         ax.set_yscale('log')       
-    ax.set_title("t=%.2f Myr"%(get_time_from_snap(snapshot) * unit_time_in_megayr))
+    ax.set_title(get_time_title(snapshot))
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
     ax.grid(ls='--', alpha=0.5, zorder=0)

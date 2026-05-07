@@ -134,14 +134,14 @@ def calculate_rampressure_only(output_directory, i_file, f_file, dmin=30, dmax=5
     
     dx = x_axis[1] - x_axis[0]
 
-    for i in tqdm.trange(i_file, i_file):
+    for i in tqdm.trange(i_file, f_file):
         filename = "snap_%03d.hdf5" % (i)
         snap_data = h5py.File(output_directory + filename, "r")
         
         x, y, z = snap_data['PartType0/Coordinates'][:].T
         vx, vy, vz = snap_data['PartType0/Velocities'][:].T
         density = snap_data['PartType0/Density'][:]
-        ram_pressure = calculate_ram_pressure(filename)
+        ram_pressure = calculate_ram_pressure(snap_data)
         center = get_center(snap_data)
     
         pool = Pool(32)
