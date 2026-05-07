@@ -66,7 +66,7 @@ class snapshot:
         t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
-        if center == None:
+        if center is None:
             center = self.center
         if scalebar_size is None:
             scalebar_size = _nice_scalebar_size(lbox)
@@ -130,7 +130,7 @@ class snapshot:
         t0: time offset for the title in Myr, default 0
         """
         BoxSize = self.BoxSize
-        if center == None:
+        if center is None:
             center = self.center
         if scalebar_size is None:
             scalebar_size = _nice_scalebar_size(lbox)
@@ -200,7 +200,7 @@ class snapshot:
         """
         _check_showbar(showbar)
         BoxSize = self.BoxSize
-        if center == None:
+        if center is None:
             center = self.center
         if scalebar_size is None:
             scalebar_size = _nice_scalebar_size(lbox)
@@ -315,7 +315,7 @@ class snapshot:
         """
         _check_showbar(showbar)
         BoxSize = self.BoxSize
-        if center == None:
+        if center is None:
             center = self.center
         if scalebar_size is None:
             scalebar_size = _nice_scalebar_size(lbox)
@@ -478,11 +478,13 @@ class snapshot:
         return f
 
     def overlap_sigma_velocity(self, lbox, slab_width=None, imsize=2000, orientation='xy', show=True,
-                                center=None, t0=0, scalebar_size=None, scalebar_label=None,
+                                showbar='bottom', range=(0, 300), vmin=None, vmax=None,
+                                weight='density_square', center=None,
+                                t0=0, scalebar_size=None, scalebar_label=None,
                                 savefig_file=None):
         """
-        TODO: NOT TESTED
-        plot velocity-dispersion map overlaid on top of gas density+temp map
+        plot line-of-sight velocity dispersion map (km/s, linear) overlaid on
+        gas density+temp map.
 
         Parameters
         ----------
@@ -490,9 +492,16 @@ class snapshot:
         slab_width: projection depth
         orientation: projection of 'xy','yz','xz'
         imsize: Npixel of the image
+        show: whether to show the plot, boolean, default True
+        showbar: colorbar placement, one of 'bottom', 'right', 'none', 'blank'
+        range: color range for sigma_v in km/s, default (0, 300)
+        vmin, vmax: log color range for the background density, default None (1 and 99 percentiles)
+        weight: weighting passed to get_channel_sigma_velocity, default 'density_square'
         center: center of the box, default None (box center)
+        savefig_file: filename to save the figure, default None (not saving)
         t0: time offset for the title in Myr, default 0
         """
+        _check_showbar(showbar)
         BoxSize = self.BoxSize
         if center is None:
             center = self.center
@@ -501,32 +510,73 @@ class snapshot:
         if scalebar_label is None:
             scalebar_label = f'{scalebar_size:g}'
 
-        cn0 = np.ones((imsize,imsize))*1e-6 # dens placeholder
-        cn1 = np.ones((imsize,imsize))*1e4 # temp placeholder
-        t_low, t_up = 2.0, 7.0 # 1e2K, 1e7K
+        cn0 = np.ones((imsize, imsize)) * 1e-6  # dens placeholder
+        cn1 = np.ones((imsize, imsize)) * 1e4   # temp placeholder
+        t_low, t_up = 2.0, 7.0
+        sv_low, sv_up = range[0], range[1]
 
-        # gas rho temp
-        channels = get_channel_gas_rhotemp(self.fn,center=center,lbox=lbox,slab_width=slab_width,
-                                   imsize=imsize,orientation=orientation)
-        x = channels[0][channels[0]>0]
-        vmin0,vmax0 = np.log10(np.percentile(x,1)),np.log10(np.percentile(x,99))
-        img1 = color.CoolWarm(color.NL(channels[1],range=(t_low,t_up)),color.NL(channels[0], range=(vmin0,vmax0)))
+        # gas rho temp background
+        channels = get_channel_gas_rhotemp(self.fn, center=center, lbox=lbox, slab_width=slab_width,
+                                           imsize=imsize, orientation=orientation)
+        x = channels[0][channels[0] > 0]
+        vmin0, vmax0 = np.log10(np.percentile(x, 1)), np.log10(np.percentile(x, 99))
+        if vmin is None:
+            vmin = vmin0
+        if vmax is None:
+            vmax = vmax0
+        img1 = color.CoolWarm(color.NL(channels[1], range=(t_low, t_up)),
+                              color.NL(channels[0], range=(vmin, vmax)))
 
-        # velocity dispersion
-        channels = get_channel_sigma_velocity(self.fn,center=center,lbox=lbox,slab_width=slab_width,
-                                          imsize=imsize,orientation=orientation)
-        img2 = velmap(color.N(channels[1],range=(50, 300)),color.NL(cn0, range=(-7,-6)))
+        # sigma_v foreground
+        channels = get_channel_sigma_velocity(self.fn, center=center, lbox=lbox, slab_width=slab_width,
+                                              imsize=imsize, orientation=orientation, weight=weight)
+        img2 = velmap(color.N(channels[1], range=(sv_low, sv_up)),
+                      color.NL(cn0, range=(-7, -6)))
 
-        print(channels[1].min(), channels[1].max())
-        #---------
-        f,ax = plt.subplots(1,1,figsize=(5,5))
-        scale = color.N(channels[1],range=(50, 300))
-        img = overlay(img1,img2,2*np.nan_to_num(scale))
+        scale = color.N(channels[1], range=(sv_low, sv_up))
+        img = overlay(img1, img2, 2 * np.nan_to_num(scale))
 
-        ax.imshow(img,extent=[0,lbox,0,lbox],origin='lower')
-        ax.set_xlabel('pc', fontsize=15)
-        ax.set_title(self._time_title(t0), fontsize=18)
-        add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+        # cmap for colorbar
+        density_array = 10 ** np.linspace(vmin, vmax, 100)
+        sv_array = np.linspace(sv_low, sv_up, 100)
+        Density_cmap, SV_cmap = np.meshgrid(density_array, sv_array, indexing='ij')
+        cbar_sv = velmap(color.N(SV_cmap, range=(sv_low, sv_up)),
+                         color.NL(np.ones_like(Density_cmap) * 1e-6, range=(-7, -6)))
+
+        if showbar == 'bottom':
+            f, axes = plt.subplots(2, 1, height_ratios=[0.93, 0.2], figsize=(5.2, 5 / 0.7))
+            f.subplots_adjust(hspace=0.3)
+            axes[0].imshow(img, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
+
+            axes[1].imshow(cbar_sv, extent=[sv_low, sv_up, sv_low, sv_up], aspect=0.055)
+            axes[1].set_xlabel(r'$\sigma_v$ [km s$^{-1}$]', labelpad=2)
+            axes[1].set_yticks([])
+        elif showbar == 'right':
+            f, axes = plt.subplots(1, 2, figsize=(7, 5), width_ratios=[0.4, 0.1])
+            axes[0].imshow(img, extent=[0, lbox, 0, lbox], origin='lower')
+            axes[0].set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(axes[0], lbox, size=scalebar_size, label=scalebar_label)
+            axes[0].set_xticks([]); axes[0].set_yticks([])
+
+            axes[1].imshow(np.transpose(cbar_sv, axes=(1, 0, 2)),
+                           extent=[sv_low, sv_up, sv_up, sv_low], aspect='auto')
+            axes[1].set_ylabel(r'$\sigma_v$ [km s$^{-1}$]', labelpad=4)
+            axes[1].set_xticks([])
+            axes[1].yaxis.tick_right()
+            axes[1].yaxis.set_label_position('right')
+        elif showbar == 'none':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_title(self._time_title(t0), fontsize=18)
+            add_scalebar(ax, lbox, size=scalebar_size, label=scalebar_label)
+            ax.set_xticks([]); ax.set_yticks([])
+        elif showbar == 'blank':
+            f, ax = plt.subplots(1, 1, figsize=(5, 5))
+            ax.imshow(img, extent=[0, lbox, 0, lbox], origin='lower')
+            ax.set_xticks([]); ax.set_yticks([])
 
         if savefig_file is not None:
             plt.savefig(savefig_file, bbox_inches='tight', dpi=300)
@@ -691,7 +741,7 @@ class snapshot:
         """
         _check_showbar(showbar)
         BoxSize = self.BoxSize
-        if center == None:
+        if center is None:
             center = self.center
         if scalebar_size is None:
             scalebar_size = _nice_scalebar_size(lbox)
@@ -885,7 +935,7 @@ def overlap_jet_contour(snapshot_turb, snapshot_jet, lbox, slab_width=None, imsi
     else:
         raise('box sizes are not the same')
     
-    if center == None:
+    if center is None:
         if snapshot_turb.center.all() == snapshot_jet.center.all():
             center = snapshot_turb.center
         else:

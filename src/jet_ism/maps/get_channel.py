@@ -218,50 +218,80 @@ def get_channel_pressure(file, center, lbox, slab_width=None,
     return channels
 
 
-def get_channel_sigma_velocity(file,center,lbox,slab_width=None, imsize=2000,smlfac=1.0,orientation='xy',weight='density_square'):
+def get_channel_sigma_velocity(file, center, lbox, slab_width=None,
+                               imsize=2000, smlfac=1.0, orientation='xy',
+                               weight='density_square'):
     """
-    TODO: test this
-    get channels of the jet tracer, if weight='mass', return mass weighted jet tracer
+    Get channels of the line-of-sight velocity dispersion (km/s), computed
+    pixel-wise via second-moment painting:
+        <v>   = Sum(w v) / Sum(w)
+        sigma = sqrt(Sum(w v^2)/Sum(w) - <v>^2)
+    The line-of-sight component is the axis perpendicular to the orientation:
+        'xy' -> vz, 'xz' -> vy, 'yz' -> vx.
+
+    Input: file (filename, including directory)
+           center (3-vector, center of the box)
+           lbox (float, box length)
+           slab_width (float, projection depth, default is lbox)
+           imsize (int, image size, default is 2000)
+           smlfac (float, smoothing length factor, default is 1.0)
+           orientation (string, projection of 'xy','yz','xz', default is 'xy')
+           weight (string, 'mass' or 'density_square', default 'density_square')
+    Output: channels (2, imsize, imsize), channels[0]: column weight, channels[1]: sigma_v in km/s
     """
     if slab_width is None:
         slab_width = lbox
-    
-    part = h5py.File(file,'r')['PartType0']
-    mask,gaspos= cut(part,center,lbox,slab_width,orientation)
-    
+
+    part = h5py.File(file, 'r')['PartType0']
+    mask, gaspos = cut(part, center, lbox, slab_width, orientation)
+
     gasm = part['Masses'][:][mask]
     gasdens = part['Density'][:][mask]
-    gasvol = gasm/part['Density'][:][mask]
-    gassl = smlfac * (gasvol ** (1/3))
-    
-    gasjet = part['Jet_Tracer'][:][mask]
-    if len(gasjet.shape)>1:
-        gasjet = gasjet[:,jetcolumn]    
-    gasjet[gasjet<1e-20] = 1e-20
+    gasvol = gasm / gasdens
+    gassl = smlfac * (gasvol ** (1 / 3))
 
-    x, y, z = part['Coordinates'][:].T
     vx, vy, vz = part['Velocities'][:].T
-
     if orientation == 'xy':
-        gasvel = weighted_std(vz[mask], weights=gasdens * gasdens)
-    if orientation == 'xz':
-        gasvel = weighted_std(vy[mask], weights=gasdens * gasdens)
-    if orientation == 'yz':
-        gasvel = weighted_std(vx[mask], weights=gasdens * gasdens)
-    
-    p_resolution = lbox/imsize
-    psml = gassl/p_resolution
-    psml[psml<1]=1
-    
-    #---------------------------------------
-    gasdev = pos2device(gaspos,lbox,slab_width,imsize,orientation) 
-    if weight=='mass':
-        channels = painter.paint(gasdev, psml, [gasm, gasm*gasvel], (imsize, imsize), np=8)    
-        channels[1] /= channels[0]
-    elif weight=='density_square':
-        channels = painter.paint(gasdev, psml, [gasjet, gasvel], (imsize, imsize), np=8)
+        v_los = vz[mask]
+    elif orientation == 'xz':
+        v_los = vy[mask]
+    elif orientation == 'yz':
+        v_los = vx[mask]
     else:
-        raise NotImplementedError
+        raise ValueError(f"orientation must be 'xy','xz','yz', got {orientation!r}")
+
+    # convert code velocity -> km/s
+    v_los = v_los * unit_velocity / 1e5
+
+    if weight == 'mass':
+        w = gasm
+    elif weight == 'density_square':
+        w = gasdens * gasdens
+    else:
+        raise NotImplementedError(f"weight {weight!r} not supported")
+
+    p_resolution = lbox / imsize
+    psml = gassl / p_resolution
+    psml[psml < 1] = 1
+
+    gasdev = pos2device(gaspos, lbox, slab_width, imsize, orientation)
+    chan = painter.paint(gasdev, psml,
+                         [w, w * v_los, w * v_los * v_los],
+                         (imsize, imsize), np=8)
+
+    sumw = chan[0]
+    nz = sumw > 0
+    mean_v = np.zeros_like(sumw)
+    mean_v2 = np.zeros_like(sumw)
+    mean_v[nz] = chan[1][nz] / sumw[nz]
+    mean_v2[nz] = chan[2][nz] / sumw[nz]
+    sigma2 = mean_v2 - mean_v * mean_v
+    sigma2[sigma2 < 0] = 0  # numerical noise
+    sigma = np.sqrt(sigma2)
+
+    channels = np.zeros((2, imsize, imsize), dtype=chan.dtype)
+    channels[0] = sumw
+    channels[1] = sigma
     return channels
 
 
